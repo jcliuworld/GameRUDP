@@ -1,0 +1,144 @@
+#                                               -*- Autoconf -*-
+# Process this file with autoconf to produce a configure script.
+
+AC_PREREQ(2.59)
+AC_INIT(AGE, 0.1.0, jc.liuworld@hotmail.com)
+AC_CONFIG_SRCDIR([sdk/Age.h])
+AC_CONFIG_HEADER([config.h])
+AM_INIT_AUTOMAKE
+
+AC_LANG(C++)
+
+# Checks for programs.
+AC_PROG_AWK
+AC_PROG_CXX
+AC_PROG_CC
+AC_PROG_INSTALL
+AC_PROG_MAKE_SET
+AC_PROG_LIBTOOL
+
+AC_ARG_ENABLE(debug,
+		AC_HELP_STRING([--enable-debug],
+		[Trun on debuging and compile time warings])
+		[	
+		if test "$enableval" = "yes" ; then
+				enable_debuging="yes";
+		fi
+		])
+CXXFLAGS=" -Wall -g --std=gnu++11"
+if test "$enable_debuging"="yes" ; then
+	CXXFLAGS=["`echo $CXXFLAGS' ' | sed -e 's/-0[^ ]* //g'`"]
+fi
+AC_SUBST(CXXFLAGS)
+CXXFLAGS="-Werror -fno-strict-aliasing -Wno-deprecated  ${CXXFLAGS} -D_GUN_SOURCE -DBUILDTIME=`date +%s` -DSVNINFO=`svn info | grep Changed | grep Rev | awk '{print $4}'`"
+
+AC_SUBST(CXXFLAGS)
+
+# Checks for libraries.
+# FIXME: Replace `main' with a function in `-lgd':
+AC_CHECK_LIB([gd], [main])
+# FIXME: Replace `main' with a function in `-llog4cxx':
+AC_CHECK_LIB([log4cxx], [main])
+# FIXME: Replace `main' with a function in `-llua':
+AC_CHECK_LIB([lua], [main])
+# FIXME: Replace `main' with a function in `-lluabind':
+AC_CHECK_LIB([luabind], [main])
+# FIXME: Replace `main' with a function in `-lpthread':
+AC_CHECK_LIB([pthread], [main])
+# FIXME: Replace `main' with a function in `-lrt':
+AC_CHECK_LIB([rt], [main])
+# FIXME: Replace `main' with a function in `-lz':
+AC_CHECK_LIB([z], [main])
+# FIXME: Replace `main' with a function in `-lprotobuf':
+AC_CHECK_LIB([protobuf], [main])
+
+AC_HAVE_LIBRARY(gd,LIBS="${LIBS} -lgd",AC_MSG_ERROR(libgd not found!))
+AC_SUBST(LIBS)
+
+AC_HAVE_LIBRARY(log4cxx,LIBS="${LIBS} -llog4cxx",AC_MSG_ERROR(liblog4cxx not found!))
+AC_SUBST(LIBS)
+
+AC_HAVE_LIBRARY(hiredis,LIBS="${LIBS} -lhiredis",AC_MSG_ERROR(hiredis not found!))
+AC_SUBST(LIBS)
+
+
+#暂时没有 后面打开
+#AC_HAVE_LIBRARY(lua,LIBS="${LIBS} -llua",AC_MSG_ERROR(liblua not found!))
+#AC_SUBST(LIBS)
+#暂时没有 后面打开
+#AC_HAVE_LIBRARY(luabind,LIBS="${LIBS} -lluabind",AC_MSG_ERROR(libluabind not found!))
+#AC_SUBST(LIBS)
+
+AC_HAVE_LIBRARY(pthread,LIBS="${LIBS} -lpthread",AC_MSG_ERROR(libpthread not found!))
+AC_SUBST(LIBS)
+
+AC_HAVE_LIBRARY(rt,LIBS="${LIBS} -lrt",AC_MSG_ERROR(librt not found!))
+AC_SUBST(LIBS)
+
+AC_HAVE_LIBRARY(z,LIBS="${LIBS} -lz",AC_MSG_ERROR(libz not found!))
+AC_SUBST(LIBS)
+
+AC_HAVE_LIBRARY(protobuf,LIBS="${LIBS} -lprotobuf",AC_MSG_ERROR(libprotobuf not found!))
+AC_SUBST(LIBS)
+AC_ARG_WITH(mysql,
+        AC_HELP_STRING(--with-mysql,[mysql install directory(default=/usr/bin)]),
+        [ac_with_mysql=$withval],
+        [ac_with_mysql=/usr/bin])
+AC_CHECK_PROG(MYSQL_CONFIG,mysql_config,yes,no,"$ac_with_mysql")
+if test "x$MYSQL_CONFIG" = "xyes"
+then
+        LIBS_MYSQL="`${ac_with_mysql}/mysql_config --libs_r`"
+        CXXFLAGS_MYSQL="`${ac_with_mysql}/mysql_config --cflags`"
+
+else
+        AC_MSG_ERROR(mysql_config not found)
+fi
+
+AC_SUBST(LIBS_MYSQL)
+AC_SUBST(CXXFLAGS_MYSQL)
+
+AC_ARG_WITH(libxml2,
+	AC_HELP_STRING(--with-xml2,[xml2 install directory(default=/usr)]),
+	[ac_with_xml2=$withval],
+	[ac_with_xml2=/usr/])
+AC_CHECK_PROG(XML2_CONFIG,xml2-config,yes,no,"$ac_with_xml2"/bin)
+if test "x$XML2_CONFIG" = "xyes"
+then
+	LIBS_XML2="`${ac_with_xml2}/bin/xml2-config --libs`"
+	CXXFLAGS_XML2="`${ac_with_xml2}/bin/xml2-config --cflags`"
+else
+	AC_MSG_ERROR(xml2-config not found)
+fi
+AC_SUBST(LIBS_XML2)
+AC_SUBST(CXXFLAGS_XML2)
+
+
+# Checks for header files.
+AC_HEADER_STDC
+AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h stddef.h stdlib.h string.h sys/ioctl.h sys/socket.h sys/time.h unistd.h])
+
+# Checks for typedefs, structures, and compiler characteristics.
+AC_HEADER_STDBOOL
+AC_C_CONST
+AC_C_INLINE
+AC_TYPE_SIZE_T
+AC_STRUCT_TM
+AC_C_VOLATILE
+
+# Checks for library functions.
+AC_FUNC_ERROR_AT_LINE
+AC_PROG_GCC_TRADITIONAL
+AC_FUNC_LSTAT
+AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
+AC_FUNC_MEMCMP
+AC_TYPE_SIGNAL
+AC_FUNC_STRERROR_R
+AC_CHECK_FUNCS([alarm bzero clock_gettime inet_ntoa memset putenv socket strcasecmp strerror strtol tzset])
+
+AC_CONFIG_FILES([Makefile
+		 sdk/Encrypt/Makefile
+		 sdk/Makefile
+         DemoServer/Makefile
+         protocol/Makefile
+                ])
+AC_OUTPUT

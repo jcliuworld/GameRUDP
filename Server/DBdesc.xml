@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="GB2312"?>
+<Age>
+	<table name="SERVERLIST" desc="服务器基本信息">
+		<column name="ID" type="DWORD" size="" desc="服务器ID"/>
+		<column name="TYPE" type="DWORD" size= "" desc="服务器类型"/>
+		<column name="NAME" type="STR" size="33" desc="服务器名称" />
+		<column name="IP" type="STR" size="16" desc="对内服务器IP"/>
+		<column name="PROT" type="DWORD" size="" desc="对内服务器端口"/>
+		<column name="EXTIP" type="STR" size="16" desc="对外服务器IP"/>
+		<column name="EXTPROT" type="DWORD" size="" desc="对外服务器端口"/>
+		<column name="NETTYPE" type="DWORD" size="" desc="网络类型0 电信 1网通"/>
+	</table>
+</Age>

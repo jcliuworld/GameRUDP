@@ -1,0 +1,42 @@
+
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <assert.h>
+
+#include "aSocket.h"
+#include "aThread.h"
+#include "aHttpTask.h"
+#include "aHttpTaskPool.h"
+#include "Age.h"
+
+
+/**
+* @brief 向套接口发送指令
+*
+* @param pstrCmd 待发送的指令
+* @param nCmdLen 待发送指令的大小
+*
+* @return   发送是否成功
+*/
+bool aHttpTask::sendCmd(const void *pstrCmd, int nCmdLen)
+{
+	if (pSocket)
+		return pSocket->sendCmdNoPack(pstrCmd, nCmdLen);
+	else
+		return false;
+}
+
+/** 
+ * @brief  获取连接的IP
+ * 
+ * @return  IP
+ */
+
+const char * aHttpTask::getIP() const
+{
+	if(pSocket == NULL)
+		return NULL;
+        return pSocket->getIP();
+}

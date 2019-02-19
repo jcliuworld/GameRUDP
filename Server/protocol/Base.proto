@@ -1,0 +1,14 @@
+syntax = "proto2";
+
+package Base;
+
+message msgNull{
+}
+
+message msgHeartbeartServer {
+        optional uint64 dwTimestamp=1; //心跳检测用时戳
+}
+message msgHeartbeartClient{
+	optional uint64 dwTimestamp=1; //心跳检测用时戳
+}
+

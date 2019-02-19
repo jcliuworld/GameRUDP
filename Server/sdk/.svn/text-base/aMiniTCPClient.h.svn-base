@@ -1,0 +1,220 @@
+#ifndef _aMiniTCPClinet_H__
+#define _aMiniTCPClinet_H__
+
+#pragma  once
+
+/** 
+* @file aMiniTCPClient.h
+* @brief  tcp 简单客户端类 用于服务器的内部客户端
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-14
+*/
+
+#include "aThread.h"
+#include "aSocket.h"
+#include "Age.h"
+#include "aMsgParse.h"
+/** 
+* @brief TCP 客户端类 用于服务器间的通信 
+*/
+
+class aMiniTCPClient: public aThread,public aMsgParse
+{
+	public:
+		/** 
+		 * @brief 构造函数 
+		 * 
+		 * @param name 连接名
+		 * @param &ip ip地址
+		 * @param port 端口
+		 * @param compress 是否消息压缩
+		 * @param utime sleep 时间
+		 */
+
+		aMiniTCPClient(const std::string &name,
+				const std::string &ip = "127.0.0.1",
+				const unsigned short port = 1000,
+				const bool compress = false,
+				const unsigned long utime = 50000L);
+		/** 
+		 * @brief 析构函数
+		 */
+
+		virtual	~aMiniTCPClient(){}
+		/** 
+		 * @brief 连接套接口
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		bool connect();
+		/** 
+		 * @brief 连接套接口
+		 * 
+		 * @param ip ip地址
+		 * @param port 端口
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		bool connect(const char *ip,unsigned short port);
+		/** 
+		 * @brief 关闭套接口
+		 */
+
+		virtual void close();
+		/** 
+		 * @brief 发送数据
+		 * 
+		 * @param msg 消息数据指针
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		virtual bool sendCmd(std::string &msg);
+		/** 
+		 * @brief 设置ip地址
+		 * 
+		 * @param ip ip地址
+		 */
+
+		void setIP(const char *ip);
+		/** 
+		 * @brief 获取ip
+		 * 
+		 * @return ip地址
+		 */
+
+		const char * getIP();
+		/** 
+		 * @brief 设置端口
+		 * 
+		 * @param port 端口
+		 */
+
+		void setPort(unsigned short port);
+		/** 
+		 * @brief 获取端口
+		 * 
+		 * @return 端口
+		 */
+
+		const unsigned short getPort();
+		/** 
+		 * @brief 设置sleeptime
+		 * 
+		 * @param utime sleeptime
+		 */
+
+		void setUsleepTime(const unsigned long utime);
+		/** 
+		 * @brief 线程回调实现
+		 */
+
+		virtual void run();
+	
+	
+		 /** 
+                 * @brief 消息解析和处理函数
+                 * 
+                 * @param cmd 消息
+                 * @param iLen 消息长度
+                 * 
+                 * @return true 有处理 false 没有处理
+                 */
+                virtual bool msgParse(const char * msg ,const int iLen ){ return false;};
+
+                virtual bool msgQueueParse(const char * msg,const int iLen){ return false;};	
+
+		 /**
+                 * @brief 是否是服务器心跳信号
+                 *
+                 * @param msg
+                 * @param iLen
+                 *
+                 * @return 
+                 */
+                virtual bool isTickServer( const char * msg,const int iLen ) = 0 ;
+
+
+                /**
+                 * @brief 是否是客户端心跳信号
+                 *
+                 * @param msg
+                 * @param iLen
+                 *
+                 * @return 
+                 */
+                virtual bool isTickClient(const char * msg , const int iLen ) = 0;	
+		/**
+		 * @brief 获取服务器心跳协议
+		 *
+		 * @param out
+		 */
+		virtual void getServerTickMsg(std::string &out) = 0;
+
+		/**
+		 * @brief 获取客户端心跳协议
+		 *
+		 * @param out
+		 */
+		virtual void getClientTickMsg(std::string &out) = 0;
+	private:
+		/** 
+		 * @brief 监听接收循环
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		bool listeningRecv();
+		/** 
+		 * @brief 监听发送循环
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		bool listeningSend();
+		/** 
+		 * @brief 套接口循环
+		 */
+
+		void sync();
+
+
+	private:
+		/** 
+		 * @brief ip地址
+		 */
+
+		std::string _ip;
+		/** 
+		 * @brief 端口
+		 */
+
+		unsigned int _port;
+		/** 
+		 * @brief 压缩
+		 */
+
+		bool _compress;
+		/** 
+		 * @brief usleeptime
+		 */
+
+		unsigned long _usleeptime;
+		/** 
+		 * @brief 是否压缩buffer
+		 */
+
+		volatile bool _buffered;
+
+	protected:
+		/** 
+		 * @brief 套接口
+		 */
+		aSocket * _sock;
+
+};
+
+
+#endif

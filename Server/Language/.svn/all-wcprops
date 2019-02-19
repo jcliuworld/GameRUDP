@@ -1,0 +1,59 @@
+K 25
+svn:wc:ra_dav:version-url
+V 32
+/svn/age_sdk/!svn/ver/6/Language
+END
+LogicL.h
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/age_sdk/!svn/ver/1/Language/LogicL.h
+END
+RecordL.h
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/age_sdk/!svn/ver/1/Language/RecordL.h
+END
+GateL.h
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/1/Language/GateL.h
+END
+GlobalL.h
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/age_sdk/!svn/ver/1/Language/GlobalL.h
+END
+sdkL.h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/Language/sdkL.h
+END
+BillL.h
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/1/Language/BillL.h
+END
+LicenseL.h
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/age_sdk/!svn/ver/1/Language/LicenseL.h
+END
+SessionL.h
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/age_sdk/!svn/ver/1/Language/SessionL.h
+END
+LoginL.h
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/age_sdk/!svn/ver/1/Language/LoginL.h
+END

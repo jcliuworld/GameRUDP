@@ -1,0 +1,475 @@
+#include "aTCPClient.h"
+/** 
+* @file aTCPClient.cpp
+* @brief 客户端连接封装 
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-17
+*/
+
+/**
+ * @brief 构造函数
+ *
+ * @param lip ip 地址
+ * @param sport 端口
+ * @param bcompress 是否压缩
+ */
+
+aTCPClient::aTCPClient(const std::string &lip,const DWORD sport,const bool bcompress):port(sport),compress(bcompress), _tick_timer(180),ip(lip)
+{
+	tick = 0;
+	_sock = NULL;
+	state = close;
+	terminate = TM_no;
+	mainloop = false;
+	fdstradd =false;
+}
+
+/**
+ * @brief 析构函数
+ */
+
+aTCPClient::~aTCPClient()
+{
+	final();
+}
+/** 
+ * @brief 连接
+ * 
+ * @return 
+ */
+
+bool aTCPClient::connect()
+{
+	int retcode = 0;
+
+	int iSocket = -1;
+
+	struct sockaddr_in addr;
+
+	iSocket = ::socket(PF_INET,SOCK_STREAM,0);
+
+	if ( -1 == iSocket)
+	{
+		Age::logger->error("create the socket fail %s",strerror(errno));
+
+		return false;
+	}
+
+	socklen_t windowSize = 128*1024;
+
+	retcode = ::setsockopt(iSocket,SOL_SOCKET,SO_RCVBUF,&windowSize,sizeof(windowSize));
+
+	if ( -1 == retcode)
+	{
+		TEMP_FAILURE_RETRY(::close(iSocket));
+		return false;
+	}
+
+	retcode = ::setsockopt(iSocket,SOL_SOCKET,SO_SNDBUF,&windowSize,sizeof(windowSize));
+
+	if ( -1 == retcode)
+	{
+		TEMP_FAILURE_RETRY(::close(iSocket));
+		return false;
+	}
+
+	bzero(&addr,sizeof(addr));
+
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = inet_addr(ip.c_str());
+	addr.sin_port = htons(port);
+
+	retcode = TEMP_FAILURE_RETRY(::connect(iSocket,(struct sockaddr *)&addr,sizeof(addr)));
+
+	if ( -1 == retcode)
+	{
+		Age::logger->error("the socket connect fail %s(%u)",ip.c_str(),port);
+		TEMP_FAILURE_RETRY(::close(iSocket));
+		return false;
+	}
+
+	_sock = new aSocket(iSocket,&addr,compress);
+
+	if ( NULL == _sock)
+	{
+		Age::logger->fatal("the mem is not enough , can not create the object of aSocket.");
+		TEMP_FAILURE_RETRY(::close(iSocket));
+		return false;
+	}
+
+	Age::logger->info("create the  socket successful %s:%u",ip.c_str(),port);
+
+	return true;
+
+}
+/** 
+ * @brief 发送监听循环
+ * 
+ * @return 
+ */
+
+bool aTCPClient::listernSend()
+{
+	if (_sock)
+		return _sock->sync();
+	else
+		return false;
+
+}
+/** 
+ * @brief 发送套接口数据
+ * 
+ * @param pstrCmd 数据指针 
+ * @param iLen 长度
+ * @param _ifBuffer 是否使用buff 
+ * 
+ * @return 
+ */
+
+bool aTCPClient::sendCmd(std::string &msg,const bool _ifBuffer /* = false */)
+{
+	switch(state)
+	{
+		case close:
+		case sync:
+			if (NULL == _sock)
+				return false;
+			else
+				return _sock->sendCmd(msg,_ifBuffer);
+			break;
+		case okay:
+		case recyle:
+			if (NULL == _sock)
+				return false;
+			else
+				return _sock->sendCmd(msg,true);
+			break;
+	}
+	return false;
+}
+/** 
+ * @brief 接收监听循环
+ * 
+ * @param bool 
+ * 
+ * @return 
+ */
+
+bool aTCPClient::listernRecv(bool needRecv)
+{
+	int retcode = 0;
+
+	if (needRecv)
+	{
+		retcode = _sock->recvToBufNoPoll();
+	}
+
+	if ( -1 == retcode)
+	{
+		Age::logger->error("%s",__PRETTY_FUNCTION__);
+		return false;
+	}
+	else
+	{
+		do 
+		{
+			char pstrCmd[aSocket::MAX_DATASIZE];
+
+			int iLen = _sock->recvToCmdNoPoll(pstrCmd,sizeof(pstrCmd));
+
+			if (iLen <= 0)
+				break;
+			else
+			{
+				if(isTickServer(pstrCmd,iLen))	
+				{
+
+					clearTick();
+					std::string send;
+					getServerTickMsg(send);
+					sendCmd(send);
+
+
+
+				}
+				else if ( isTickClient(pstrCmd,iLen))
+				{
+
+					clearTick();	
+				}
+				else
+				{
+					msgParse(pstrCmd,iLen);
+
+				}
+
+			}
+
+		} while (true);
+	}
+
+	return true;
+}
+/** 
+ * @brief 获取下一个连接状态
+ */
+
+void aTCPClient::getNextState()
+{
+	ConnectState old_state = getState();
+
+	lifeTime.now();
+	switch(old_state)
+	{
+		case close:
+			setState(sync);
+			break;
+		case sync:
+			addToContainer();
+			setState(okay);
+			break;
+		case okay:
+			removeFromContainer();
+			setState(recyle);
+			break;
+		case recyle:
+			setState(close);
+			final();
+			break;
+	}
+
+	Age::logger->debug("%s(%s,%u,%s->%s)",__FUNCTION__,ip.c_str(),port,getStateString(old_state),getStateString(getState()));
+
+}
+/** 
+ * @brief 重新连接
+ */
+
+void aTCPClient::reconn()
+{
+	removeFromContainer();
+	setState(recyle);
+}
+/** 
+ * @brief 重置连接状态
+ */
+
+
+void aTCPClient::resetState()
+{
+	ConnectState old_state = getState();
+
+	lifeTime.now();
+	setState(close);
+	final();
+
+	Age::logger->debug("%s(%s,%u,%s->%s)",__FUNCTION__,ip.c_str(),port,getStateString(old_state),getStateString(getState()));
+
+}
+/** 
+ * @brief 结束函数
+ */
+
+void aTCPClient::final()
+{
+	SAFE_DELETE(_sock);
+	terminate = TM_no;
+	mainloop =false;
+}
+/** 
+ * @brief 结束套接口
+ * 
+ * @param method 方法
+ */
+
+void aTCPClient::Terminate(const TerminateMethod method)
+{
+	terminate = method;
+	clearTick();
+}
+/** 
+ * @brief 是否结束
+ * 
+ * @return 结束
+ */
+
+bool aTCPClient::isTerminate()const
+{
+	return TM_no != terminate;
+}
+/** 
+ * @brief 是否是第一次进入主循环
+ * 
+ * @return 是 true 否 false
+ */
+bool aTCPClient::checkFirstMainLoop()
+{
+	if (mainloop)
+		return false;
+	else
+	{
+		mainloop = true;
+		return true;
+	}
+}
+/** 
+ * @brief 获取连接状态
+ * 
+ * @return 连接状态
+ */
+
+const aTCPClient::ConnectState aTCPClient::getState()const
+{
+	return state;
+}
+/** 
+ * @brief 设置连接状态
+ * 
+ * @param state 连接状态
+ */
+
+void aTCPClient::setState(const ConnectState state)
+{
+	this->state = state;
+}
+/** 
+ * @brief 获取连接状态
+ * 
+ * @param state 连接状态
+ * 
+ * @return 连接状态
+ */
+
+const char * aTCPClient::getStateString(const ConnectState state)
+{	
+	const char * retval = NULL;
+	switch(state)
+	{
+		case close:
+			retval = "close";
+			break;
+		case sync:
+			retval = "sync";
+			break;
+		case recyle:
+			retval = "recyle";
+			break;
+		case okay:
+			retval = "okay";
+			break;
+	}
+
+	return retval;
+}
+/** 
+ * @brief 加入epoll
+ * 
+ * @param kdpfd 套接口
+ * @param events epoll 事件结构
+ * @param ptr 
+ */
+
+void aTCPClient::addEpoll(int kdpfd,__uint32_t events,void *ptr)
+{
+	if (_sock)
+	{
+		_sock->addEpoll(kdpfd,events,ptr);
+	}
+}
+/** 
+ * @brief 移除 epoll
+ * 
+ * @param kpdfd 套接口
+ * @param evenets 事件结构
+ */
+
+void aTCPClient::delEpoll(int kpdfd,__uint32_t evenets)
+{
+	if (_sock)
+	{
+		_sock->delEpoll(kpdfd,evenets);
+	}
+
+}
+/** 
+ * @brief 检查套接口超时时间
+ * 
+ * @param state 状态
+ * @param ct 超时
+ * @param timeout 超时标记 
+ * 
+ * @return 
+ */
+
+bool aTCPClient::checkStateTimeOut(const ConnectState state, const atmTime &ct,const time_t timeout)const
+{
+	if ( state == this->state)
+	{
+		return ( lifeTime.elapse(ct) >= timeout);
+	}
+	else
+		return false;
+}
+
+/** 
+ * @brief fdstradd
+ * 
+ * @return 
+ */
+
+bool aTCPClient::isFdsrAdd()
+{
+	return fdstradd;
+}
+/** 
+ * @brief 设置 fdstradd
+ * 
+ * @param 
+ * 
+ * @return 
+ */
+
+bool aTCPClient::fdstrAdd(bool set)
+{
+	fdstradd = set;
+	return fdstradd;
+}
+/** 
+ * @brief 检查 interval
+ * 
+ * @param ct 当前时间
+ * 
+ * @return 
+ */
+
+bool aTCPClient::checkInterval(const aRealTime & ct)
+{
+	return _tick_timer(ct);
+}
+/** 
+ * @brief tick 标记
+ * 
+ * @return 
+ */
+
+bool aTCPClient::checkTick()const
+{
+	return tick == 1;
+}
+/** 
+ * @brief 清除 tick 
+ */
+
+void aTCPClient::clearTick()
+{
+	tick = 0;
+}
+/** 
+ * @brief 设置 tick
+ */
+
+void aTCPClient::setTick()
+{
+	tick = 1;
+}
+

@@ -1,0 +1,3 @@
+blowfish.lo: blowfish.cpp blowfish.h
+
+blowfish.h:

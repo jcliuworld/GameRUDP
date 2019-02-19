@@ -1,0 +1,44 @@
+#ifndef _aComponent_H__
+#define _aComponent_H__
+
+/**
+* @file aComponent.h
+* @brief 基础组件类 
+* @author ljc jc.liuworld@hotmail.com
+* @version 
+* @date 2017-08-03
+*/
+
+#include "aDef.h"
+
+class aComponentBase
+{
+	public:
+		 typedef DWORD INDENTIFY;
+
+	protected:
+		static DWORD _componentCount;
+};
+
+template <typename Derived>
+class aComponent : public aComponentBase
+{
+	public:
+		aComponent(DWORD id):_dwEntryID(id){}
+
+		static INDENTIFY getID();
+
+	private:
+
+		DWORD _dwEntryID;
+
+};
+
+
+template <typename C>
+aComponentBase::INDENTIFY aComponent<C>::getID() {
+	static INDENTIFY  id = _componentCount++;
+	return id;
+}
+
+#endif

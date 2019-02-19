@@ -1,0 +1,176 @@
+#ifndef _aLuaBase_H__
+#define _aLuaBase_H__
+/** 
+ * @file aLuaBase.h
+ * @brief LUA 脚本引擎基础封装
+ * @author ljc jc.liuworld@hotmail.com
+ * @date 2010-06-17
+ */
+#include "sdkL.h"
+extern "C"
+{
+#include "lua.h"
+#include "lauxlib.h"
+#include "lualib.h"
+}
+#include "Age.h"
+#include "aLogger.h"
+class aLuaBase
+{
+        protected:
+                /** 
+                 * @brief 构造函数
+                 */
+
+                aLuaBase();
+                /** 
+                 * @brief 析构函数
+                 */
+
+                ~aLuaBase();
+                /** 
+                 * @brief 重新加载
+                 * 
+                 * @return true 成功 false 失败
+                 */
+
+                bool reload();
+                /** 
+                 * @brief 获取虚拟机句柄
+                 * 
+                 * @return 虚拟机句柄
+                 */
+
+                inline lua_State * getHandel()
+                {
+                        return L;
+                }
+
+                bool doTop();
+                /**
+                 * @brief 加载脚本
+                 *
+                 * @param buffer 脚本内容
+                 * @return true 成功 false 失败
+                 */
+                bool loadString(const char * buffer);
+  /**
+                * @brief 执行脚本
+                *
+                * @param filename 文件名
+                * @return true 成功 false 失败
+                */
+                bool doFile(const char * fileName);
+                /**
+                * @brief 执行脚本
+                *
+                * @param buffer 脚本指针
+                * @return true 成功 false 失败
+                */
+                bool doString(const char * buffer);
+                /**
+                * @brief 执行脚本
+                *
+                * @param buffer 脚本指针
+                * @param size 脚本大小
+                * @return true 成功 false 失败
+                */
+                bool doBuffer(const char * buffer,size_t size);
+
+		  protected:
+                /**
+                 * @brief 虚拟机
+                 */
+                lua_State * L;
+
+                /**
+                 * @brief 错误编号
+                 */
+                int _errorFn;
+
+                /**
+                 * @brief 虚拟机状态
+                 */
+                int _parseStateus;
+
+        private:
+
+                /**
+                 * @brief 加载lua lib
+                 */
+                void openStdLib();
+
+                /**
+                 * @brief 关闭 结束 
+                 *
+                 * @param
+                 * @return
+                 */
+                void final();
+	 /**
+                 * @brief 检测函数接口是否存在 
+                 *
+                 * @param 函数名
+                 * @return true 存在 false 不存在
+                 */
+                bool isExistFunction(const char * name);
+
+        private:
+                void pushValue(bool v);
+                void pushValue(int v);
+                void pushValue(short v);
+                void pushValue(char v);
+                void pushValue(long v);
+                void pushValue(unsigned int v);
+                void pushValue(unsigned short v);
+                void pushValue(unsigned char v);
+                void pushValue(unsigned long v);
+                void pushValue(float v);
+                void pushValue(double v);
+                void pushValue(long double v);
+                void pushValue(const char * v);
+        public:
+
+                bool    callRtbool(const char * func);
+                void    callRTvoid(const char * func);
+
+                template <typename P1>
+                        void callRTvoid(const char * func,P1 p1);
+
+                template <typename P1,typename P2>
+                        void callRTvoid(const char * func,P1 p1,P2 p2);
+
+                template <typename P1,typename P2, typename P3>
+                        void callRTvoid(const char * func,P1 p1,P2 p2,P3 p3);
+
+                template <typename P1,typename P2,typename P3,typename P4>
+			void callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4);
+
+		template <typename P1,typename P2,typename P3,typename P4,typename P5>
+			void callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4,P5 p5);
+
+		template <typename P1,typename P2,typename P3,typename P4,typename P5,typename P6>
+			void callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4,P5 p5,P6 p6);
+
+		template <typename P1,typename P2,typename P3,typename P4,typename P5,typename P6,typename P7>
+			void callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4,P5 p5,P6 p6,P7 p7);
+
+		template <typename P1,typename P2,typename P3,typename P4,typename P5,typename P6,typename P7,typename P8>
+			void callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4,P5 p5,P6 p6,P7 p7,P8 p8);
+
+		template <typename P1,typename P2,typename P3,typename P4,typename P5,typename P6,typename P7,typename P8,typename P9>
+			void callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4,P5 p5,P6 p6,P7 p7,P8 p8,P9 p9);
+
+		template <typename P1,typename P2,typename P3,typename P4,typename P5,typename P6,typename P7,typename P8,typename P9,typename P10>
+			void callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4,P5 p5,P6 p6,P7 p7,P8 p8,P9 p9,P10 p10);
+
+		DWORD getGlobalNumber(const char * name);
+		const char * getGlobalString(const char * name);
+		int popInt(int index);
+		const char * popString(int index);
+		//typedef int (*lua_CFunction) (lua_State *L);
+		void registerFunc(const char * funcName,lua_CFunction func);
+
+};
+
+#endif

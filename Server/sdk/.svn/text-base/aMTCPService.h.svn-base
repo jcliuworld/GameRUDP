@@ -1,0 +1,98 @@
+#ifndef _aMTCPService_H__
+#define _aMTCPService_H__
+
+#pragma  once
+
+/** 
+ * @file aMTCPService.h
+ * @brief TCP 服务框架类
+ * @author ljc jc.liuworld@hotmail.com
+ * @date 2010-05-18
+ */
+#include <map>
+#include <vector>
+
+#include "aDef.h"
+#include "aNoneCopyable.h"
+#include "aSocket.h"
+#include "aMutex.h"
+#pragma pack(1)
+struct stAcceptInfo
+{
+	struct sockaddr_in addr;
+	unsigned short port;
+
+};
+#pragma pack()
+class aMTCPService : private aNoneCopyable
+{
+	public :
+
+		typedef std::map<int,stAcceptInfo> ACCEPTINFO;
+		typedef std::map<int,stAcceptInfo>::iterator ACCEPTINFO_IT;
+
+		/** 
+		 * @brief 构造函数
+		 * 
+		 * @param name 服务器名字
+		 */
+
+		aMTCPService(const std::string &name);
+		/** 
+		 * @brief 析构函数
+		 */
+
+		~aMTCPService();
+
+		/** 
+		 * @brief 绑定一个端口
+		 * 
+		 * @param name 名字 
+		 * @param port 端口号
+		 * 
+		 * @return 
+		 */
+
+		bool bind(const std::string &name, const unsigned short port);
+
+		/** 
+		 * @brief 接收一个套接口的连接
+		 * 
+		 * @param addr 地址
+		 * 
+		 * @return 
+		 */
+
+		int accept(ACCEPTINFO & info);
+
+	private:
+
+
+		static const int T_MSEC = 2100;
+		/** 
+		 * @brief 等待最长队列数量
+		 */
+
+		static const int MAX_WAITQUEUE =2000;
+		/** 
+		 * @brief 名字
+		 */
+
+		std::string name;
+		/** 
+		 * @brief 套接口
+		 */
+
+		int kdpfd;
+
+		aMutex _mutex;
+
+		std::vector<struct epoll_event > epfds;
+
+		std::map<int,unsigned short> _portMap;
+
+};
+
+#endif
+
+

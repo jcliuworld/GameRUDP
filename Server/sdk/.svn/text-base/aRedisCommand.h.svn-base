@@ -1,0 +1,106 @@
+#ifndef _aRedisCommand_H__
+#define _aRedisCommand_H__
+
+#include <sstream>
+#include <map>
+#include "aDef.h"
+#include "aFunc.h"
+
+typedef	AHMap<AStr,AStr,Age::key_hash,Age::key_equal> REDIS_HASH_MAP;
+
+struct aRedisCmd {
+	aRedisCmd() : argc(0), argv(NULL), argvlen(NULL) {}
+
+	~aRedisCmd()
+	{
+		if (argv) delete [] argv;
+		if (argvlen) delete [] argvlen;
+	}
+
+	void shallow_assign(const AVec<AStr>& args)
+	{
+		argc = args.size();
+		argv = new char*[argc];
+		argvlen = new size_t[argc];
+		for (int i = 0; i < argc; ++i)
+		{
+			const AStr& arg = args[i];
+			argv[i] = (char*)arg.c_str();
+			argvlen[i] = arg.size();
+		}
+	}
+
+	int argc;
+	char** argv;
+	size_t* argvlen;
+};
+
+class aRedisCmdMaker {
+	
+	public:
+		explicit aRedisCmdMaker(const AStr& cmdname)
+		{
+			_args.push_back(cmdname);
+		}
+
+		~aRedisCmdMaker()
+		{
+			_args.clear();
+		}
+
+		template <typename T>
+			inline aRedisCmdMaker& operator << (const T& data)
+			{
+				std::ostringstream oss;
+				oss << data;
+				_args.push_back(oss.str());
+				return *this;
+			}
+
+		inline aRedisCmdMaker& operator << (const AStr& data)
+		{
+			_args.push_back(data);
+			return *this;
+		}
+
+		aRedisCmdMaker& operator << (const AVec<AStr> &strs)
+		{
+			for ( AVec<AStr>::const_iterator it = strs.begin(); it != strs.end(); ++it)
+				_args.push_back(*it);
+			return *this;
+		}
+
+		aRedisCmdMaker& operator << (const AMap<AStr,AStr>& m)
+		{
+			for (AMap<AStr,AStr>::const_iterator it = m.begin(); it != m.end(); ++it)
+			{
+				_args.push_back(it->first);
+				_args.push_back(it->second);
+			}
+			return *this;
+		}
+
+		aRedisCmdMaker& operator << (const REDIS_HASH_MAP & h)
+		{
+			for (REDIS_HASH_MAP::const_iterator it = h.begin(); it != h.end(); ++it)
+			{
+				_args.push_back(it->first);
+				_args.push_back(it->second);
+			}
+			return *this;
+		}
+		
+
+		operator const aRedisCmd& ()
+		{
+			_cmd.shallow_assign(_args);
+			return _cmd;
+		}
+
+
+	
+	private:
+		AVec<AStr> _args;
+		aRedisCmd _cmd;
+};
+#endif 

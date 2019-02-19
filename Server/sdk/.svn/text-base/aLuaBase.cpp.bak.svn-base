@@ -1,0 +1,451 @@
+#include "aLuaBase.h"
+#include <assert.h>
+/** 
+ * @brief 构造函数
+ */
+aLuaBase::aLuaBase():_errorFn(0),_parseStateus(-1)
+{
+	L = lua_open();
+	openStdLib();
+	lua_checkstack(L,10240);
+}
+/** 
+ * @brief 析构函数
+ */
+aLuaBase::~aLuaBase()
+{
+
+}
+/**
+ * @brief 加载lua lib
+ */
+void aLuaBase::openStdLib()
+{
+	assert(L);
+	luaL_openlibs(L);
+}
+bool aLuaBase::reload()
+{
+	final();
+	_errorFn = 0;
+	_parseStateus = -1;
+	L = lua_open();
+	openStdLib();
+	lua_checkstack(L,10240);
+
+	return true;
+}
+void aLuaBase::final()
+{
+	if(L)
+	{
+		lua_close(L);
+	}
+}
+
+bool aLuaBase::doTop()
+{
+	if(_parseStateus == 0)
+	{
+		_parseStateus = lua_pcall(L,0,LUA_MULTRET,0);
+	}
+	if(_parseStateus!=0)
+	{
+		lua_getglobal(L,"_ALERT");
+		if(lua_isfunction(L,-1))
+		{
+			lua_insert(L,-2);
+			lua_call(L,1,0);
+		}
+		else
+		{
+			fprintf(stderr,"%s\n",lua_tostring(L,-2));
+			lua_pop(L,2);
+		}
+	}
+	return _parseStateus == 0;
+}
+bool aLuaBase::loadString(const char * buffer)
+{
+	return (_parseStateus = luaL_loadbuffer(L,buffer,strlen(buffer),"LuaWrap"))==0;
+}
+
+bool aLuaBase::doFile(const char * fileName)
+{
+	_parseStateus = luaL_dofile(L,fileName);
+
+	if(_parseStateus != 0)
+	{
+		Age::logger->debug(SYS_SDK_ID_000008,fileName);
+		return false;
+	}
+	Age::logger->debug(SYS_SDK_ID_000009,fileName);
+	return true;
+
+}
+bool aLuaBase::doBuffer(const char * buffer,size_t size)
+{
+	return (_parseStateus = luaL_dostring(L,buffer)) == 0;
+}
+bool aLuaBase::doString(const char * buffer)
+{
+	return doBuffer(buffer,strlen(buffer));
+}
+bool aLuaBase::isExistFunction(const char * name)
+{
+	lua_getglobal(L,name);
+	if(lua_type(L,-1) == LUA_TFUNCTION)
+		return true;
+	return false;
+}
+void aLuaBase::callRTvoid(const char * func)
+{
+	if(isExistFunction(func))
+	{
+		lua_getglobal(L,func);
+		if(lua_pcall(L,0,0,0))
+		{
+			Age::logger->error(SYS_SDK_ID_000010,lua_tostring(L,-1));
+			lua_pop(L,1);
+		}
+
+	}
+}
+bool aLuaBase::callRtbool(const char * func)
+{
+	if(isExistFunction(func))
+	{
+		lua_getglobal(L,func);
+		if(lua_pcall(L,0,0,0))
+		{
+			Age::logger->error(SYS_SDK_ID_000011,lua_tostring(L,-1));
+			lua_pop(L,1);
+			return false;
+		}
+
+		return true;
+	}
+	return false;
+
+}
+DWORD aLuaBase::getGlobalNumber(const char * name)
+{
+	if(!name)
+		return 0;
+
+	lua_getglobal(L,name);
+	DWORD ret = 0;
+	if(lua_isnumber(L,-1))
+	{
+		ret = static_cast<DWORD>(lua_tonumber(L,-1));
+		lua_settop(L,-2);
+	}
+	return ret;
+}
+const char * aLuaBase::getGlobalString(const char * name)
+{
+	static char ret[] = "";
+	if(!name)
+		return ret;
+
+	lua_getglobal(L,name);
+	if(lua_isstring(L,-1))
+	{
+		const char * pp = static_cast<const char * >(lua_tostring(L,-1));
+		lua_settop(L,-2);
+		return pp;
+	}
+	return ret;
+}
+int aLuaBase::popInt(int index)
+{
+	return static_cast<int>(lua_tonumber(L,index));
+}
+const char * aLuaBase::popString(int index)
+{
+	return static_cast<const char * >(lua_tostring(L,index));
+}void aLuaBase::registerFunc(const char * funcName,lua_CFunction func)
+{
+	if(!funcName) return;
+
+	if(!L) return;
+
+	lua_pushstring(L,funcName);
+	lua_pushcclosure(L,func,0);
+	lua_settable(L,LUA_GLOBALSINDEX);
+}
+
+void aLuaBase::pushValue(int v)
+{
+	lua_pushnumber(L,(lua_Number)v);
+}
+
+void aLuaBase::pushValue(short v)
+{
+	lua_pushnumber(L,(lua_Number)v);
+}
+void aLuaBase::pushValue(char v)
+{
+	lua_pushnumber(L,(lua_Number)v);
+}
+
+void aLuaBase::pushValue(long v)
+{
+	lua_pushnumber(L,(lua_Number)v);
+}
+
+void aLuaBase::pushValue(unsigned int v)
+{
+	lua_pushnumber(L,(lua_Number)v);
+}
+
+void aLuaBase::pushValue(unsigned short v)
+{
+	lua_pushnumber(L,(lua_Number)v);
+}void aLuaBase::pushValue(unsigned char v)
+{
+	lua_pushnumber(L,(lua_Number)v);
+}
+void aLuaBase::pushValue(unsigned long v)
+{
+	lua_pushnumber(L,(lua_Number)v);
+}
+void aLuaBase::pushValue(float v)
+{
+	lua_pushnumber(L,(lua_Number)v);
+}
+void aLuaBase::pushValue(double v)
+{
+	lua_pushnumber(L,(lua_Number)v);
+}
+void aLuaBase::pushValue(long double v)
+{
+	lua_pushnumber(L,(lua_Number)v);
+}
+void aLuaBase::pushValue(const char * v)
+{
+	if(v)
+	{
+		lua_pushstring(L,v);
+	}
+	else
+	{
+		lua_pushnil(L);
+	}
+
+}
+void aLuaBase::pushValue(bool v)
+{
+	lua_pushboolean(L,v);
+}
+	template <typename P1>
+void aLuaBase::callRTvoid(const char * func,P1 p1)
+{
+	if(isExistFunction(func))
+	{
+		lua_getglobal(L,func);
+		pushValue(p1);
+		lua_checkstack(L,10);
+		if(lua_pcall(L,1,0,0))
+		{
+			Age::logger->error(SYS_SDK_ID_000012,lua_tostring(L,-1));
+			lua_pop(L,1);
+			return;
+		}
+	}
+}
+
+	template <typename P1,typename P2>
+void aLuaBase::callRTvoid(const char * func,P1 p1,P2 p2)
+{
+	if(isExistFunction(func))
+	{
+		lua_getglobal(L,func);
+		pushValue(p1);
+		pushValue(p2);
+		lua_checkstack(L,10);
+		if(lua_pcall(L,2,0,0))
+		{
+			Age::logger->error(SYS_SDK_ID_000013,lua_tostring(L,-1));
+			lua_pop(L,1);
+			return;
+		}
+	}
+}
+	template <typename P1,typename P2, typename P3>
+void aLuaBase::callRTvoid(const char * func,P1 p1,P2 p2,P3 p3)
+{
+	if(isExistFunction(func))
+	{
+		lua_getglobal(L,func);
+		pushValue(p1);
+		pushValue(p2);
+		pushValue(p3);
+		lua_checkstack(L,10);
+		if(lua_pcall(L,3,0,0))
+		{
+			Age::logger->error(SYS_SDK_ID_000014,lua_tostring(L,-1));
+			lua_pop(L,1);
+			return;
+		}
+	}
+}
+	template <typename P1,typename P2,typename P3,typename P4>
+void aLuaBase::callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4)
+{
+	if(isExistFunction(func))
+	{
+		lua_getglobal(L,func);
+		pushValue(p1);
+		pushValue(p2);
+		pushValue(p3);
+		pushValue(p4);
+		lua_checkstack(L,10);
+		if(lua_pcall(L,4,0,0))
+		{
+			Age::logger->error(SYS_SDK_ID_000015,lua_tostring(L,-1));
+			lua_pop(L,1);
+			return;
+		}
+	}
+}
+	template <typename P1,typename P2,typename P3,typename P4,typename P5>
+void aLuaBase::callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4,P5 p5)
+{
+	if(isExistFunction(func))
+	{
+		lua_getglobal(L,func);
+		pushValue(p1);
+		pushValue(p2);
+		pushValue(p3);
+		pushValue(p4);
+		pushValue(p5);
+		lua_checkstack(L,10);
+		if(lua_pcall(L,5,0,0))
+		{
+			Age::logger->error(SYS_SDK_ID_000016,lua_tostring(L,-1));
+			lua_pop(L,1);
+			return;
+		}
+	}
+}
+	template <typename P1,typename P2,typename P3,typename P4,typename P5,typename P6>
+void aLuaBase::callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4,P5 p5,P6 p6)
+{
+	if(isExistFunction(func))
+	{
+		lua_getglobal(L,func);
+		pushValue(p1);
+		pushValue(p2);
+		pushValue(p3);
+		pushValue(p4);
+		pushValue(p5);
+		pushValue(p6);
+		lua_checkstack(L,10);
+		if(lua_pcall(L,6,0,0))
+		{
+			Age::logger->error(SYS_SDK_ID_000017,lua_tostring(L,-1));
+			lua_pop(L,1);
+			return;
+		}
+	}
+}
+
+	template <typename P1,typename P2,typename P3,typename P4,typename P5,typename P6,typename P7>
+void aLuaBase::callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4,P5 p5,P6 p6,P7 p7)
+{
+	if(isExistFunction(func))
+	{
+		lua_getglobal(L,func);
+		pushValue(p1);
+		pushValue(p2);
+		pushValue(p3);
+		pushValue(p4);
+		pushValue(p5);
+		pushValue(p6);
+		pushValue(p7);
+		lua_checkstack(L,10);
+		if(lua_pcall(L,7,0,0))
+		{
+			Age::logger->error(SYS_SDK_ID_000018,lua_tostring(L,-1));
+			lua_pop(L,1);
+			return;
+		}
+	}
+}
+
+	template <typename P1,typename P2,typename P3,typename P4,typename P5,typename P6,typename P7,typename P8>
+void aLuaBase::callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4,P5 p5,P6 p6,P7 p7,P8 p8)
+{
+	if(isExistFunction(func))
+	{
+		lua_getglobal(L,func);
+		pushValue(p1);
+		pushValue(p2);
+		pushValue(p3);
+		pushValue(p4);
+		pushValue(p5);
+		pushValue(p6);
+		pushValue(p7);
+		pushValue(p8);
+		lua_checkstack(L,10);
+		if(lua_pcall(L,8,0,0))
+		{
+			Age::logger->error(SYS_SDK_ID_000019,lua_tostring(L,-1));
+			lua_pop(L,1);
+			return;
+		}
+	}
+}
+
+
+	template <typename P1,typename P2,typename P3,typename P4,typename P5,typename P6,typename P7,typename P8,typename P9>
+void aLuaBase::callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4,P5 p5,P6 p6,P7 p7,P8 p8,P9 p9)
+{
+	if(isExistFunction(func))
+	{
+		lua_getglobal(L,func);
+		pushValue(p1);
+		pushValue(p2);
+		pushValue(p3);
+		pushValue(p4);
+		pushValue(p5);
+		pushValue(p6);
+		pushValue(p7);
+		pushValue(p8);
+		pushValue(p9);
+		lua_checkstack(L,10);
+		if(lua_pcall(L,9,0,0))
+		{
+			Age::logger->error(SYS_SDK_ID_000020,lua_tostring(L,-1));
+			lua_pop(L,1); lua_pop(L,1);
+			return;
+		}
+	}
+}
+	template <typename P1,typename P2,typename P3,typename P4,typename P5,typename P6,typename P7,typename P8,typename P9,typename P10>
+void aLuaBase::callRTvoid(const char * func,P1 p1,P2 p2,P3 p3,P4 p4,P5 p5,P6 p6,P7 p7,P8 p8,P9 p9,P10 p10)
+{
+	if(isExistFunction(func))
+	{
+		lua_getglobal(L,func);
+		pushValue(p1);
+		pushValue(p2);
+		pushValue(p3);
+		pushValue(p4);
+		pushValue(p5);
+		pushValue(p6);
+		pushValue(p7);
+		pushValue(p8);
+		pushValue(p9);
+		pushValue(p10);
+		lua_checkstack(L,10);
+		if(lua_pcall(L,10,0,0))
+		{
+			Age::logger->error(SYS_SDK_ID_000021,lua_tostring(L,-1));
+			lua_pop(L,1);
+			return;
+		}
+	}
+}
+

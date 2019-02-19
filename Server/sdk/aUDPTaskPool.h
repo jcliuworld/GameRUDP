@@ -1,0 +1,188 @@
+#ifndef _aUDPTaskPool_H__
+#define _aUDPTaskPool_H__
+
+/** 
+ * @file aUDPTaskPool.h
+ * @brief 连接线程池
+ * @author ljc jc.liuworld@hotmail.com
+ * @date 2017-11-01
+ */
+
+#include "aNoneCopyable.h"
+#include "aThread.h"
+#include "aDef.h"
+#include "aUDPTask.h"
+#include "aTime.h"
+#include "Age.h"
+
+class aUDPSyncThread;
+class aUDPRecycleThread;
+
+/** 
+ * @brief  连接线程池类，封装了一个线程处理多个连接的线程池框架
+ */
+
+enum POOLSTATE
+{
+	state_none = 0,
+	state_maintain = 1 << 0, //
+};
+
+class aUDPTaskPool : private aNoneCopyable
+{
+
+	public:
+
+		/** 
+		 * @brief 构造函数
+		 * 
+		 * @param maxConns 线程池并行处理有效连接的最大数量
+		 * @param state 初始化的时候连接线程池的状态
+		 * @param us 
+		 * 
+		 * @return 
+		 */
+
+		explicit aUDPTaskPool(const int maxConns, const int state,const unsigned long us=50000L) : _maxConns(maxConns), state(state)
+		{
+			setUsleepTime(us);
+			syncThread = NULL;
+			recycleThread = NULL;
+			maxThreadCount = minThreadCount;
+		};
+
+		/** 
+		 * @brief 析构函数，销毁一个线程池对象
+		 */
+
+		~aUDPTaskPool()
+		{
+			final();
+		}
+
+		/** 
+		 * @brief  获取连接线程池当前状态
+		 * 
+		 * @return 返回连接线程池的当前状态
+		 */
+
+		const int getState() const
+		{
+			return state;
+		}
+
+		/** 
+		 * @brief 设置连接线程池状态
+		 * 
+		 * @param state 设置的状态标记位
+		 */
+
+		void setState(const int state)
+		{
+			this->state |= state;
+		}
+
+		/** 
+		 * @brief 清楚连接线程池状态
+		 * 
+		 * @param state 清楚的状态标记位
+		 */
+
+		void clearState(const int state)
+		{
+			this->state &= ~state;
+		}
+
+		/** 
+		 * @brief 返回连接池中子连接个数
+		 * 
+		 * @return 
+		 */
+
+		const int getSize();
+
+		/** 
+		 * @brief 获得最大连接数
+		 * 
+		 * @return 
+		 */
+
+		inline const int getMaxConns() const { return _maxConns; }
+
+		/** 
+		 * @brief 添加一个任务到验证线程
+		 * 
+		 * @param task 
+		 * 
+		 * @return 
+		 */
+
+		bool addVerify(aUDPTask *task);
+
+		/** 
+		 * @brief 添加一个任务到同步线程
+		 * 
+		 * @param task 
+		 */
+
+		void addSync(aUDPTask *task);
+
+		/** 
+		 * @brief 添加一个任务到连接线程
+		 * 
+		 * @param task 
+		 * 
+		 * @return 
+		 */
+
+		bool addOkay(aUDPTask *task);
+
+		/** 
+		 * @brief 添加一个任务到回收线程
+		 * 
+		 * @param task 
+		 */
+
+		void addRecycle(aUDPTask *task);
+		static void  setUsleepTime(const unsigned long time)
+		{
+			usleep_time=time;
+		}
+
+		/** 
+		 * @brief 初始化函数
+		 * 
+		 * @return 
+		 */
+
+		bool init();
+
+		/** 
+		 * @brief 结束函数
+		 */
+
+		void final();
+
+	private:
+
+		const int _maxConns;										/**< 线程池并行处理连接的最大数量*/
+
+		static const int maxVerifyThreads = 4;					/**< 最大验证线程数量> */
+		aThreadGroup verifyThreads;								/**< 验证线程，可以有多个*/
+
+		aUDPSyncThread *syncThread;								/**< 等待同步线程 */
+
+		static const int minThreadCount = 1;					/**< 线程池中同时存在主处理线程的最少个数*/
+		int maxThreadCount;										/**< 线程池中同时存在主处理线程的最大个数*/
+		aThreadGroup okayThreads;								/**< 处理主线程，多个*/
+
+		aUDPRecycleThread *recycleThread;							/**< 连接回收线程> */
+
+		int state;												/**< 连接池状态*/
+	public:
+		static unsigned long usleep_time;						/**< 循环等待时间*/
+
+};
+
+#endif
+

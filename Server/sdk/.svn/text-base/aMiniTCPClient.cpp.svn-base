@@ -1,0 +1,358 @@
+#include "aMiniTCPClient.h"
+/** 
+* @file aMiniTCPClient.cpp
+* @brief  tcp 简单客户端类 用于服务器的内部客户端
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-14
+*/
+
+/** 
+* @brief 构造函数 
+* 
+* @param name 连接名
+* @param &ip ip地址
+* @param port 端口
+* @param compress 是否消息压缩
+* @param utime sleep 时间
+*/
+
+aMiniTCPClient::aMiniTCPClient(const std::string &name,
+		const std::string &ip,
+		const unsigned short port,
+		const bool compress,
+		const unsigned long utime):aThread(name),_ip(ip),_port(port),_compress(compress),_usleeptime(utime),_buffered(false),_sock(NULL)
+{
+
+}
+/** 
+ * @brief 连接套接口
+ * 
+ * @return 成功 true 失败 false
+ */
+
+bool aMiniTCPClient::connect()
+{
+	int retcode = 0;
+
+	int iSocket = -1;
+
+	struct sockaddr_in addr;
+
+	iSocket = ::socket(PF_INET,SOCK_STREAM,0);
+
+	if ( -1 == iSocket)
+	{
+		Age::logger->error("create the socket fail %s",strerror(errno));
+
+		return false;
+	}
+
+	socklen_t windowSize = 128*1024;
+
+	retcode = ::setsockopt(iSocket,SOL_SOCKET,SO_RCVBUF,&windowSize,sizeof(windowSize));
+
+	if ( -1 == retcode)
+	{
+		TEMP_FAILURE_RETRY(::close(iSocket));
+		return false;
+	}
+
+	retcode = ::setsockopt(iSocket,SOL_SOCKET,SO_SNDBUF,&windowSize,sizeof(windowSize));
+
+	if ( -1 == retcode)
+	{
+		TEMP_FAILURE_RETRY(::close(iSocket));
+		return false;
+	}
+
+	bzero(&addr,sizeof(addr));
+
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = inet_addr(_ip.c_str());
+	addr.sin_port = htons(_port);
+
+	retcode = TEMP_FAILURE_RETRY(::connect(iSocket,(struct sockaddr *)&addr,sizeof(addr)));
+
+	if ( -1 == retcode)
+	{
+		Age::logger->error("the socket connect fail %s(%u)",_ip.c_str(),_port);
+		TEMP_FAILURE_RETRY(::close(iSocket));
+		return false;
+	}
+
+	_sock = new aSocket(iSocket,&addr,_compress);
+
+	if ( NULL == _sock)
+	{
+		Age::logger->fatal("the mem is not enough , can not create the object of aSocket.");
+		TEMP_FAILURE_RETRY(::close(iSocket));
+		return false;
+	}
+
+	Age::logger->info("create the  socket successful %s:%u",_ip.c_str(),_port);
+
+	return true;
+}
+/** 
+ * @brief 连接套接口
+ * 
+ * @param ip ip地址
+ * @param port 端口
+ * 
+ * @return 成功 true 失败 false
+ */
+
+bool aMiniTCPClient::connect(const char *ip,unsigned short port)
+{
+	_ip = ip;
+	_port = port;
+	return connect();
+}
+/** 
+ * @brief 关闭套接口
+ */
+
+void aMiniTCPClient::close()
+{
+	SAFE_DELETE(_sock);
+}
+
+/** 
+ * @brief 设置ip地址
+ * 
+ * @param ip ip地址
+ */
+
+void aMiniTCPClient::setIP(const char *ip)
+{
+	_ip = ip;
+}
+/** 
+ * @brief 获取ip
+ * 
+ * @return ip地址
+ */
+
+const char * aMiniTCPClient::getIP()
+{
+	return _ip.c_str();
+}
+/** 
+ * @brief 设置端口
+ * 
+ * @param port 端口
+ */
+
+void aMiniTCPClient::setPort(unsigned short port)
+{
+	_port = port;
+}
+/** 
+ * @brief 获取端口
+ * 
+ * @return 端口
+ */
+
+const unsigned short aMiniTCPClient::getPort()
+{
+	return _port;
+}
+
+/** 
+ * @brief 发送数据
+ * 
+ * @param pstrCmd 数据指针
+ * @param iLen 长度
+ * 
+ * @return 成功 true 失败 false
+ */
+
+bool aMiniTCPClient::sendCmd(std::string & msg)
+{
+	if (_sock == NULL)
+		return false;
+	else
+		return _sock->sendCmd(msg);
+}
+/** 
+ * @brief 设置sleeptime
+ * 
+ * @param utime sleeptime
+ */
+void aMiniTCPClient::setUsleepTime(const unsigned long utime)
+{
+	_usleeptime = utime;
+}
+/** 
+ * @brief 监听接收循环
+ * 
+ * @return 成功 true 失败 false
+ */
+
+bool aMiniTCPClient::listeningRecv()
+{
+	int retcode = 0;
+
+	retcode = _sock->recvToBufNoPoll();
+
+
+	if ( -1 == retcode)
+	{
+		Age::logger->error("%s",__PRETTY_FUNCTION__);
+		return false;
+	}
+	else
+	{
+		do 
+		{
+			char pstrCmd[aSocket::MAX_DATASIZE];
+
+			int iCmdLen = _sock->recvToCmdNoPoll(pstrCmd,sizeof(pstrCmd));
+
+			if (iCmdLen <= 0)
+				break;
+			else
+			{
+
+				if(isTickServer(pstrCmd,iCmdLen))
+				{
+					std::string send;
+
+					getServerTickMsg(send);
+
+					sendCmd(send);
+						
+				}
+				else
+				{
+					msgParse(pstrCmd,iCmdLen);
+				}
+			}
+
+
+		} while (true);
+	}
+
+	return true;
+}
+/** 
+ * @brief 监听发送循环
+ * 
+ * @return 成功 true 失败 false
+ */
+
+bool aMiniTCPClient::listeningSend()
+{
+
+	if (_sock)
+		return _sock->sync();
+	else 
+		return false;
+}
+/** 
+ * @brief 套接口循环
+ */
+
+
+void aMiniTCPClient::sync()
+{
+	if (_sock)
+	{
+		_sock->force_sync();
+	}
+}
+/** 
+ * @brief 线程回调实现
+ */
+
+void aMiniTCPClient::run()
+{
+	_buffered = true;
+	int epfd = epoll_create(256);assert(-1 != epfd);
+	int epfd_r = epoll_create(256);assert(-1 != epfd_r);
+	_sock->addEpoll(epfd,EPOLLOUT|EPOLLIN|EPOLLERR|EPOLLPRI,NULL);
+	_sock->addEpoll(epfd_r,EPOLLIN|EPOLLERR|EPOLLPRI,NULL);
+
+	struct epoll_event ep_event,ep_event_r;
+
+	ep_event.events = 0; 
+	ep_event_r.events = 0;
+
+	aRealTime currentTime;
+	aRealTime _1_msec(currentTime),_50_mesc(currentTime);
+
+
+	while(!isFinal())
+	{
+
+		aThread::msleep(2);
+
+		currentTime.now();
+
+		if (_1_msec.elapse(currentTime) >= 2)  
+		{
+			_1_msec = currentTime;
+			if (TEMP_FAILURE_RETRY(::epoll_wait(epfd_r,&ep_event_r,1,0)) > 0)
+			{
+				if (ep_event_r.events &(EPOLLERR|EPOLLPRI))
+				{
+					Age::logger->error("the socket error %s",__PRETTY_FUNCTION__);
+					break;
+				}else if(ep_event_r.events & EPOLLIN)
+				{
+					if (!listeningRecv())
+					{
+						Age::logger->error("the socket read error %s",__PRETTY_FUNCTION__);
+						break;
+					}
+				}
+				ep_event_r.events = 0;
+
+
+			}
+		}
+
+		if (_50_mesc.elapse(currentTime) >= (_usleeptime/1000))
+		{
+			_50_mesc = currentTime;
+
+			if (TEMP_FAILURE_RETRY(::epoll_wait(epfd,&ep_event,1,0)) > 0)
+			{
+				if (ep_event.events &(EPOLLERR|EPOLLPRI))
+				{
+					Age::logger->error("the socket error %s",__PRETTY_FUNCTION__);
+					break;
+				}else 
+				{
+					if(ep_event.events & EPOLLIN)
+					{
+						if (!listeningRecv())
+						{
+							Age::logger->error("the socket read error %s",__PRETTY_FUNCTION__);
+							break;
+						}
+
+					}
+					if(ep_event.events & EPOLLOUT)
+					{
+						if (!listeningSend())
+						{
+							Age::logger->error("the socket write error %s",__PRETTY_FUNCTION__);
+							break;
+						}
+					}
+
+
+				}
+				ep_event_r.events = 0;
+
+
+			}
+
+		}
+
+	}
+
+	sync();
+	_buffered = false;
+}

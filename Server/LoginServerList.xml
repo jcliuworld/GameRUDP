@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="GB2312"?>
+<Age>
+<LoginServerList>
+<server ip = "127.0.0.1" port="9901" />
+<!--server ip = "127.0.0.1" port="9902" />
+<server ip = "127.0.0.1" port="9903" /-->
+</LoginServerList>
+</Age>

@@ -1,0 +1,289 @@
+#include "aRedisResult.h"
+#include "Age.h"
+#include "aRedisClient.h"
+
+class aReplyGuard {
+	public:
+		aReplyGuard(redisReply* reply)
+			: _reply(reply)
+		{
+		}
+
+		~aReplyGuard()
+		{
+			freeReplyObject(_reply);
+		}
+
+	private:
+		redisReply* _reply;
+};
+
+void aRedisResult::resultException(redisReply* reply,const char * function)
+{
+	if (reply->type == REDIS_REPLY_ERROR)
+	{
+		Age::logger->error("[REDIS] REDIS_REPLY_ERROR %s ",function);
+	}
+	else if (reply->type == REDIS_REPLY_NIL)
+	{
+		Age::logger->debug("[REDIS] REDIS_REPLY_NIL %s",function);
+	}
+	else
+	{
+		Age::logger->error("[REDIS] RESULT UNKNOWN %s ",function);
+	}
+}
+bool aRedisResult::Ok(redisReply* reply)
+{   
+	bool ret = false;
+	aReplyGuard guard(reply);
+
+	if (reply->type == REDIS_REPLY_STATUS)
+	{
+		if (strncmp(reply->str, REDIS_STATUS_REPLY_OK, reply->len) == 0)
+			ret = true;
+	}
+	else
+	{
+		resultException(reply,__FUNCTION__);
+		ret = false;
+	}
+
+	return ret;
+}
+
+AStr aRedisResult::Status(redisReply* reply)
+{
+	AStr ret;
+	aReplyGuard guard(reply);
+
+	if (reply->type == REDIS_REPLY_STATUS)
+		ret.assign(reply->str, reply->len);
+	else
+	{
+		resultException(reply,__FUNCTION__);
+	}
+
+	return ret;	
+}
+
+int aRedisResult::Int(redisReply* reply)
+{
+	int ret = 0;
+	aReplyGuard guard(reply);
+
+	if (reply->type == REDIS_REPLY_INTEGER)
+		ret =(int) reply->integer;
+	else
+	{
+		resultException(reply,__FUNCTION__);
+	}
+
+	return ret;	
+}
+
+long aRedisResult::Long(redisReply* reply)
+{
+	long ret = 0;
+	aReplyGuard guard(reply);
+
+	if (reply->type == REDIS_REPLY_INTEGER)
+		ret = (long) reply->integer;
+	else
+	{
+		resultException(reply,__FUNCTION__);
+	}
+
+	return ret;	
+
+}
+
+long long  aRedisResult::LongLong(redisReply* reply)
+{
+	long long ret = 0;
+	aReplyGuard guard(reply);
+
+	if (reply->type == REDIS_REPLY_INTEGER)
+		ret =  reply->integer;
+	else
+	{
+		resultException(reply,__FUNCTION__);
+	}
+
+	return ret;	
+}
+
+float aRedisResult::Float(redisReply* reply)
+{
+	float ret = 0;
+	aReplyGuard guard(reply);
+
+	AStr str;
+	if (reply->type == REDIS_REPLY_STRING)
+		ret = atof(reply->str);
+	else
+		resultException(reply,__FUNCTION__);
+
+	return ret;
+}
+int aRedisResult::String(redisReply* reply, AStr& str)
+{
+	int ret = 0;
+	aReplyGuard guard(reply);
+
+	if (reply->type == REDIS_REPLY_STRING)
+		str.assign(reply->str, reply->len);
+	else
+		ret = -1;
+
+	return ret;	
+}
+int aRedisResult::Vec(redisReply* reply, AVec<AStr>& arr)
+{
+	int elements = 0;
+	arr.clear();
+	aReplyGuard guard(reply);
+
+	if (reply->type == REDIS_REPLY_ARRAY)
+	{
+		if (reply->elements > 0)
+		{
+			arr.reserve(reply->elements);
+			for (size_t i = 0; i < reply->elements; ++i)
+			{
+				redisReply* elem = reply->element[i];
+				if (elem->type == REDIS_REPLY_STRING)
+				{
+					arr.push_back(AStr(elem->str, elem->len));
+					elements++;
+				}
+			}
+		}
+	}
+	else
+		resultException(reply,__FUNCTION__);
+
+	return elements;	
+}
+int aRedisResult::Set(redisReply* reply, ASet<AStr>& s)
+{
+	int elements = 0;
+	s.clear();
+	aReplyGuard guard(reply);
+
+	if (reply->type == REDIS_REPLY_ARRAY)
+	{
+		if (reply->elements > 0)
+		{
+			for (size_t i = 0; i < reply->elements; ++i)
+			{
+				redisReply* elem = reply->element[i];
+				if (elem->type == REDIS_REPLY_STRING)
+				{
+					s.insert(string(elem->str, elem->len));
+					elements++;
+				}
+			}
+		}
+	}
+	else
+		resultException(reply,__FUNCTION__);
+
+	return elements;		
+}
+
+int aRedisResult::Map(redisReply* reply, const AVec<AStr>& keys,AMap<AStr,AStr>& m)
+{
+	size_t elements = 0;
+	aReplyGuard guard(reply);
+
+	m.clear();
+
+	size_t keysize = keys.size();
+	if (reply->type == REDIS_REPLY_ARRAY)
+	{
+		if (reply->elements > 0)
+		{
+			for (size_t i = 0; i < reply->elements && i < keysize; ++i)
+			{
+				redisReply* elem = reply->element[i];
+				if (elem->type == REDIS_REPLY_STRING)
+				{
+					const AStr & key = keys[i];
+					m[key] = AStr(elem->str, elem->len);
+					elements++;
+				}
+				else if (elem->type == REDIS_REPLY_NIL)
+				{
+					// log keys[i] get failed
+				}
+			}
+		}
+	}
+	else
+		resultException(reply,__FUNCTION__);
+
+	return elements;		
+}
+int aRedisResult::HMap(redisReply* reply, REDIS_HASH_MAP & h)
+{
+	int elements = 0;
+	aReplyGuard guard(reply);
+
+	h.clear();
+	if (reply->type == REDIS_REPLY_ARRAY)
+	{
+		if (reply->elements > 0)
+		{
+			for (size_t i = 0; i < reply->elements; ++i)
+			{
+				redisReply* filed = reply->element[i++];
+				redisReply* value = reply->element[i];
+				if ((filed->type == REDIS_REPLY_STRING) && (value->type == REDIS_REPLY_STRING))
+				{
+					h[AStr(filed->str, filed->len)] = AStr(value->str, value->len);
+					elements++;
+				}
+				else
+					resultException(reply,__FUNCTION__);
+			}
+		}
+	}
+	else
+		resultException(reply,__FUNCTION__);
+
+	return elements;	
+}
+int aRedisResult::HMap(redisReply* reply, const AVec<AStr>& fields, REDIS_HASH_MAP & h)
+{
+	size_t elements = 0;
+	aReplyGuard guard(reply);
+
+	h.clear();
+
+	size_t fieldsize = fields.size();
+	if (reply->type == REDIS_REPLY_ARRAY)
+	{
+		if (reply->elements > 0)
+		{
+			for (size_t i = 0; i < reply->elements && i < fieldsize; ++i)
+			{
+				redisReply* elem = reply->element[i];
+				if (elem->type == REDIS_REPLY_STRING)
+				{
+					const AStr& field = fields[i];
+					h[field] = AStr(elem->str, elem->len);
+					elements++;
+				}
+				else if (elem->type == REDIS_REPLY_NIL)
+				{
+					// log fields[i] get failed
+				}
+			}
+		}
+	}
+	else
+		resultException(reply,__FUNCTION__);
+
+	return elements;	
+}

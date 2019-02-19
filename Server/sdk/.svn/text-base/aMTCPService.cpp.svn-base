@@ -1,0 +1,185 @@
+#include "aMTCPService.h"
+#include "Age.h"
+#include "sdkL.h"
+/** 
+ * @file aMTCPService.cpp
+ * @brief TCP 服务框架类
+ * @author ljc jc.liuworld@hotmail.com
+ * @date 2010-05-18
+ */
+
+
+/** 
+ * @brief 构造函数
+ * 
+ * @param name 服务器名字
+ */
+
+aMTCPService::aMTCPService(const std::string &name) : name(name)
+{
+	kdpfd = epoll_create(8);
+	assert(-1 != kdpfd);
+	epfds.resize(8);
+}
+/** 
+ * @brief 析构函数
+ */
+aMTCPService::~aMTCPService()
+{
+	TEMP_FAILURE_RETRY(::close(kdpfd));
+	for(std::map<int,unsigned short>::iterator it = _portMap.begin();it != _portMap.end();++it)
+	{
+		if (-1 == it->first)
+		{
+			::shutdown(it->first,SHUT_RD);
+			TEMP_FAILURE_RETRY(::close(it->first));
+		}
+	}
+	_portMap.clear();
+}
+
+
+/** 
+ * @brief 绑定一个端口
+ * 
+ * @param name 名字 
+ * @param port 端口号
+ * 
+ * @return 
+ */
+
+
+bool aMTCPService::bind(const std::string &name, const unsigned short port)
+{
+	aMutexAutoScop mutex;
+
+	struct sockaddr_in addr;
+
+	int sock;
+
+	for(std::map<int,unsigned short>::iterator it = _portMap.begin();it != _portMap.end();++it)
+	{
+		if(it->second == port)
+		{
+			Age::logger->error("the serivice has been init");
+			return false;
+		}
+	}
+
+
+	sock = ::socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+
+	if (-1 == sock)
+	{
+		Age::logger->error("create the socket fail");
+		return false;
+	}
+
+	int reuse = 1;
+
+	if( -1 == ::setsockopt(sock,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof(reuse)))
+	{
+		Age::logger->error("can not set the socket to be the SO_REUSEADDR stat");
+		TEMP_FAILURE_RETRY(::close(sock));
+		return false;
+	}
+
+	socklen_t window_size = 128 * 1024;
+
+	if ( -1 == ::setsockopt(sock,SOL_SOCKET,SO_RCVBUF,&window_size,sizeof(window_size)))
+	{
+		Age::logger->error("can not set the socket receive buffer size ");
+		TEMP_FAILURE_RETRY(::close(sock));
+		return false;
+	}
+
+	if ( -1 == setsockopt(sock,SOL_SOCKET,SO_SNDBUF,&window_size,sizeof(window_size)))
+	{
+		Age::logger->error("can not set the socket send buffer size");
+		TEMP_FAILURE_RETRY(::close(sock));
+		return false;
+	}
+
+	bzero(&addr,sizeof(addr));
+
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = htons(INADDR_ANY);
+	addr.sin_port = htons(port);
+
+	int retcode = ::bind(sock,(struct sockaddr *)&addr,sizeof(addr));
+
+	if ( -1 == retcode)
+	{
+		Age::logger->error("can not bind the prot %d",port);
+		TEMP_FAILURE_RETRY(::close(sock));
+		return false;
+	}
+	retcode = ::listen(sock,MAX_WAITQUEUE);
+
+	if (-1 == retcode)
+	{
+		Age::logger->error("listen the port fail");
+		TEMP_FAILURE_RETRY(::close(sock));
+		return false;
+	}
+
+	struct epoll_event ev;
+	ev.events = EPOLLIN;
+	ev.data.ptr = NULL;
+	ev.data.fd = sock;
+	//ev.data.u32 = port;
+	assert( 0 == epoll_ctl(kdpfd,EPOLL_CTL_ADD,sock,&ev));
+
+	Age::logger->info(SYS_SDK_ID_000032,name.c_str(),port);
+
+	_portMap.insert(std::make_pair(sock,port));
+
+	if (_portMap.size() > epfds.size())
+	{
+		epfds.resize(_portMap.size()+8);
+	}
+
+	return true;
+
+}
+
+
+/** 
+ * @brief 接收一个套接口的连接
+ * 
+ * @param addr 地址
+ * 
+ * @return 
+ */
+
+
+int aMTCPService::accept(ACCEPTINFO & info)
+{
+	aMutexAutoScop mutex;
+	int retval = 0;
+	int rc = epoll_wait(kdpfd,&epfds[0],_portMap.size(),T_MSEC);
+	if (rc > 0)
+	{
+		for ( int i = 0; i< rc; ++i)
+		{
+			if (epfds[i].events & EPOLLIN)
+			{
+				stAcceptInfo infotemp;
+				bzero(&infotemp , sizeof(stAcceptInfo));
+				socklen_t len = sizeof(struct sockaddr_in);
+				int key = TEMP_FAILURE_RETRY(::accept(epfds[i].data.fd,(struct sockaddr *)&(infotemp.addr),&len));
+				if( -1 == key)
+					return retval;
+				std::map<int,unsigned short>::iterator it = _portMap.find(epfds[i].data.fd);
+				if(it != _portMap.end())
+				{
+					infotemp.port = it->second; 
+				}
+				info.insert(std::make_pair(key,infotemp));
+				retval ++;
+			}
+		}
+	}
+
+	return retval;
+}

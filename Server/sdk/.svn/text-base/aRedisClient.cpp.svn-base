@@ -1,0 +1,848 @@
+#include "aRedisClient.h"
+#include "Age.h"
+#include "aFunc.h"
+#include "aRedisResult.h"
+#include "aRedisCommand.h"
+
+DWORD aRedisClient::_autoIncrease = 1;
+
+AStr bitop_strs[] = {"AND", "OR", "XOR", "NOT"};
+
+AStr insert_direction_str[] =  {"BEFORE", "AFTER"};
+
+/**
+ * @brief 构造函数
+ */
+aRedisClient::aRedisClient(const AStr &host,const int port,const AStr &pass,const int db):_context(NULL),_port(0),_dwID( _autoIncrease ++)
+{
+	_host = host;	
+	_port = port;
+
+	_passwd = pass;
+	_db = db;
+}
+
+/**
+ * @brief 析构函数
+ */
+aRedisClient::~aRedisClient()
+{
+	disconnect();
+}	
+
+
+bool aRedisClient::init()
+{
+	if(!connect())
+		return false;
+
+	if(!auth())
+		return false;
+
+	if(!select())
+		return false;
+
+	return true;
+}
+
+/**
+ * @brief 链接
+ *
+ * @return 
+ */
+bool aRedisClient::connect(  )
+{
+	_context = redisConnect( _host.c_str(),_port);	
+
+	if(_context->err)	
+	{
+		Age::logger->error("[REDIS] 链接错误 无法连接到服务器 %s:%u",_host.c_str(),_port);
+		_context = NULL;
+
+		return false;
+	}
+
+	Age::logger->debug("[REDIS] 初始化 %s:%u 库:%u 成功",_host.c_str(),_port,_db);
+	return true;
+}	
+/**
+ * @brief 断开连接
+ */
+void aRedisClient::disconnect()
+{
+	if( _context )
+	{
+		quit();
+		redisFree(_context);	
+		_context = NULL;
+		Age::logger->debug("[REDIS] 断开连接 %s:%u 库:%u",_host.c_str(),_port,_db);
+
+	}	
+}
+
+/**
+ * @brief 重新连接
+ *
+ * @return 
+ */
+bool aRedisClient::reconnect()
+{
+	disconnect();
+	return init();	
+}
+
+/**
+ * @brief ping
+ *
+ * @return 
+ */
+bool aRedisClient::ping()
+{
+
+	redisReply* reply = (redisReply*)redisCommand(_context,  "PING");
+
+	check_ptr(reply,false,Age::strFormat("[REDIS] PING 错误 %s:%d ",_host.c_str(),_port).c_str())
+
+	bool ret = false;
+
+	if (strncmp(reply->str, REDIS_STATUS_REPLY_PING, reply->len) == 0)
+		ret = true;
+
+	freeReplyObject(reply);
+	return ret;	
+}
+
+/**
+ * @brief 获取db
+ *
+ * @param db
+ *
+ * @return 
+ */
+bool aRedisClient::select()
+{
+	redisReply* reply = (redisReply*)redisCommand(_context,  "SELECT %d", _db);
+
+	check_ptr(reply,false,Age::strFormat("[REDIS] SELECT 错误 %s:%d  DB:%d",_host.c_str(),_port,_db).c_str());
+
+	return aRedisResult::Ok(reply);
+}
+
+/**
+ * @brief 登陆
+ *
+ * @param password
+ *
+ * @return 
+ */
+bool aRedisClient::auth()
+{
+	//合成AUTH 命令 并执行
+
+	redisReply* reply = (redisReply*)redisCommand(_context,  "AUTH %s", _passwd.c_str());
+
+	check_ptr(reply,false,Age::strFormat("[REDIS] AUTH 密码错误 %s:%d  DB:%d",_host.c_str(),_port,_db).c_str());
+
+	return aRedisResult::Ok(reply);
+}
+
+/**
+ * @brief 退出
+ *
+ * @return 
+ */
+bool aRedisClient::quit()
+{
+	redisReply* reply = (redisReply*)redisCommand(_context,  "QUIT");
+	check_ptr(reply,false,Age::strFormat("[REDIS] QUIT 错误 %s:%d",_host.c_str(),_port).c_str());
+
+	aRedisResult::Ok(reply);
+
+	return true;
+}
+/**
+ * @brief 发送命令
+ *
+ * @param cmd
+ *
+ * @return 
+ */
+redisReply * aRedisClient::sendCmd( const aRedisCmd & cmd)
+{
+	redisReply* reply = (redisReply*)redisCommandArgv(_context,
+			cmd.argc, (const char**)cmd.argv, cmd.argvlen);
+
+	check_ptr(reply,reply,Age::strFormat("[REDIS] COMMAND 错误 %s:%d CMD[%s]VALUE[%s]",_host.c_str(),_port).c_str());
+
+	return reply;
+}
+
+
+DWORD aRedisClient::getID()
+{
+	return _dwID;
+}
+
+
+redisReply* aRedisClient::execute(const aRedisCmd& cmd)
+{
+
+	redisReply* reply = sendCmd(cmd);
+
+	if(reply == NULL)
+	{
+		reconnect();	
+
+		reply = sendCmd(cmd);
+
+		if( reply == NULL)
+			return NULL;
+	}
+
+	return reply;
+}
+
+bool aRedisClient::Ok(const aRedisCmd& cmd)
+{
+	redisReply* reply = execute(cmd);
+	return aRedisResult::Ok(reply);	
+}
+AStr aRedisClient::Status(const aRedisCmd& cmd)
+{
+	redisReply* reply = execute(cmd);
+	return aRedisResult::Status(reply);	
+}
+
+int aRedisClient::Int(const aRedisCmd& cmd)
+{
+	redisReply* reply = execute(cmd);
+	return aRedisResult::Int(reply);	
+
+}
+long aRedisClient::Long(const aRedisCmd& cmd)
+{
+	redisReply* reply = execute(cmd);
+	return aRedisResult::Long(reply);	
+
+}
+long long aRedisClient::LongLong(const aRedisCmd& cmd)
+{
+	redisReply* reply = execute(cmd);
+	return aRedisResult::LongLong(reply);	
+
+
+}
+float aRedisClient::Float(const aRedisCmd& cmd)
+{
+	redisReply* reply = execute(cmd);
+	return aRedisResult::Float(reply);	
+}
+int aRedisClient::String(const aRedisCmd& cmd, AStr& str)
+{
+	redisReply* reply = execute(cmd);
+	return aRedisResult::String(reply,str);	
+}
+
+int aRedisClient::Vec(const aRedisCmd& cmd, AVec<AStr>& arr)
+{
+	redisReply* reply = execute(cmd);
+	return aRedisResult::Vec(reply,arr);	
+}
+int aRedisClient::Set(const aRedisCmd& cmd, ASet<AStr>& s)
+{
+	redisReply* reply = execute(cmd);
+	return aRedisResult::Set(reply,s);	
+}
+int aRedisClient::Map(const aRedisCmd& cmd, const AVec<AStr>& keys, AMap<AStr,AStr>& m)
+{
+	redisReply* reply = execute(cmd);
+	return aRedisResult::Map(reply,keys,m);	
+}
+int aRedisClient::HMap(const aRedisCmd& cmd, REDIS_HASH_MAP& h)
+{
+	redisReply* reply = execute(cmd);
+	return aRedisResult::HMap(reply,h);	
+
+}
+int aRedisClient::HMap(const aRedisCmd& cmd, const AVec<AStr> & fileds,REDIS_HASH_MAP& h)
+{
+	redisReply* reply = execute(cmd);
+	return aRedisResult::HMap(reply,fileds,h);	
+}
+
+///////////string////////////////
+
+bool aRedisClient::set(const AStr& key, const AStr& value)
+{
+	aRedisCmdMaker cmd("SET");
+	cmd << key << value;
+	return Ok(cmd);
+}
+
+bool aRedisClient::setex(const AStr& key, const AStr& value, const int seconds)
+{
+	if (seconds <= 0)
+		return false;
+
+	aRedisCmdMaker cmd("SETEX");
+	cmd << key << seconds << value;
+	return Ok(cmd);
+}
+
+bool aRedisClient::psetex(const AStr& key, const AStr& value, const int milliseconds)
+{
+	if (milliseconds <= 0)
+		return false;
+
+	aRedisCmdMaker cmd("SETEX");
+	cmd << key << milliseconds << value;
+	return Ok(cmd);
+}
+
+int aRedisClient::setnx(const AStr& key, const AStr& value)
+{
+	aRedisCmdMaker cmd("SETNX");
+	cmd << key << value;
+	return Int(cmd);
+}
+
+bool aRedisClient::mset(const AMap<AStr,AStr>& kv_map)
+{
+	aRedisCmdMaker cmd("MSET");
+	cmd << kv_map;
+	return Ok(cmd);
+}
+
+int aRedisClient::msetnx(const AMap<AStr,AStr>& kv_map)
+{
+	aRedisCmdMaker cmd("MSETNX");
+	cmd << kv_map;
+	return Int(cmd);
+}
+
+int aRedisClient::get(const AStr& key, AStr& value)
+{
+	aRedisCmdMaker cmd("GET");
+	cmd << key;
+	return String(cmd, value);	
+}
+int aRedisClient::mget(const AVec<AStr>& keys, AMap<AStr,AStr> & kv_map)
+{
+	aRedisCmdMaker cmd("MGET");
+	cmd << keys;
+	return Map(cmd, keys, kv_map);
+}
+
+int aRedisClient::getset(const AStr& key, const AStr& value, AStr& original)
+{
+	aRedisCmdMaker cmd("GETSET");
+	cmd << key << value;
+	return String(cmd, original);
+}
+
+int aRedisClient::setrange(const AStr& key, const int offset, const AStr& value)
+{
+	aRedisCmdMaker cmd("SETRANGE");
+	cmd << key << offset << value;
+	return Int(cmd);	
+}
+
+int aRedisClient::getrange(const AStr& key, const int start, const int end, AStr& substring)
+{
+	aRedisCmdMaker cmd("GETRANGE");
+	cmd << key << start << end;
+	return String(cmd, substring);	
+}
+
+int aRedisClient::append(const AStr& key, const AStr& value)
+{
+	aRedisCmdMaker cmd("APPEND");
+	cmd << key << value;
+	return Int(cmd);	
+}
+
+int aRedisClient::incr(const AStr& key)
+{
+	aRedisCmdMaker cmd("INCR");
+	cmd << key;
+	return Int(cmd);	
+}
+
+int aRedisClient::incrby(const AStr& key, const int increment)
+{
+	aRedisCmdMaker cmd("INCRBY");
+	cmd << key << increment;
+	return Int(cmd);	
+}
+
+float aRedisClient::incrbyfloat(const AStr& key, const float increment)
+{
+	aRedisCmdMaker cmd("INCRBYFLOAT");
+	cmd << key << increment;
+	return Float(cmd);	
+}
+int aRedisClient::decr(const AStr& key)
+{
+	aRedisCmdMaker cmd("DECR");
+	cmd << key;
+	return Int(cmd);
+}
+
+int aRedisClient::decrby(const AStr& key, const int increment)
+{
+	aRedisCmdMaker cmd("DECRBY");
+	cmd << key << increment;
+	return Int(cmd);	
+}
+
+int aRedisClient::strlen(const AStr& key)
+{
+	aRedisCmdMaker cmd("STRLEN");
+	cmd << key;
+	return Int(cmd);	
+}
+
+int aRedisClient::setbit(const AStr& key, const int offset, const int value)
+{
+	aRedisCmdMaker cmd("SETBIT");
+	cmd << key << offset << value;
+	return Int(cmd);	
+}
+
+int aRedisClient::getbit(const AStr& key, const int offset)
+{
+	aRedisCmdMaker cmd("GETBIT");
+	cmd << key << offset;
+	return Int(cmd);	
+}
+
+int aRedisClient::bitcount(const AStr& key)
+{
+	aRedisCmdMaker cmd("BITCOUNT");
+	cmd << key;
+	return Int(cmd);	
+}
+
+int aRedisClient::bitcount(const AStr& key, const int start)
+{
+	aRedisCmdMaker cmd("BITCOUNT");
+	cmd << key << start;
+	return Int(cmd);
+}
+
+int aRedisClient::bitcount(const AStr& key, const int start, const int end )
+{
+	aRedisCmdMaker cmd("BITCOUNT");
+	cmd << key << start << end;
+	return Int(cmd);
+}
+
+int aRedisClient::bitop(const BitOp operation, const AStr& destkey, const AVec<AStr>& keys)
+{
+	if (keys.empty())
+		return -1;
+
+	aRedisCmdMaker cmd("BITOP");
+	cmd << bitop_strs[operation] << destkey << keys;
+	return Int(cmd);
+}
+
+// keys command
+int aRedisClient::exists(const AStr& key)
+{
+	aRedisCmdMaker cmd("EXISTS");
+	cmd << key;
+	return Int(cmd);	
+}
+
+int aRedisClient::expire(const AStr& key, const unsigned int seconds)
+{
+	aRedisCmdMaker cmd("EXPIRE");
+	cmd << key << seconds;
+	return Int(cmd);	
+}
+
+int aRedisClient::expireat(const AStr& key, const unsigned int timestamp)
+{
+	aRedisCmdMaker cmd("EXPIREAT");
+	cmd << key << timestamp;
+	return Int(cmd);	
+}
+
+int aRedisClient::pexpire(const AStr& key, const unsigned int milliseconds)
+{
+	aRedisCmdMaker cmd("PEXPIRE");
+	cmd << key << milliseconds;
+	return Int(cmd);	
+}
+
+int aRedisClient::pexpireat(const AStr& key, const unsigned int milliseconds_timestamp)
+{
+	aRedisCmdMaker cmd("PEXPIREAT");
+	cmd << key << milliseconds_timestamp;
+	return Int(cmd);	
+}
+
+int aRedisClient::ttl(const AStr& key)
+{
+	aRedisCmdMaker cmd("TTL");
+	cmd << key;
+
+	return Int(cmd);	
+}
+
+int aRedisClient::pttl(const AStr& key)
+{
+	aRedisCmdMaker cmd("PTTL");
+	cmd << key;
+	return Int(cmd);	
+}
+
+int aRedisClient::persist(const AStr& key)
+{
+	aRedisCmdMaker cmd("PERSIST");
+	cmd << key;
+	return Int(cmd);
+}
+
+int aRedisClient::keys(const AStr& pattern, AVec<AStr>& arr)
+{
+	aRedisCmdMaker cmd("KEYS");
+	cmd << pattern;
+	return Vec(cmd, arr);	
+}
+
+int aRedisClient::del(const AVec<AStr>& keys)
+{
+	aRedisCmdMaker cmd("DEL");
+	cmd << keys;
+	return Int(cmd);
+}
+
+AStr aRedisClient::type(const string& key)
+{
+	aRedisCmdMaker cmd("TYPE");
+	cmd << key;
+	return Status(cmd);	
+}
+
+// set command
+int aRedisClient::scard(const AStr& key)
+{
+	aRedisCmdMaker cmd("SCARD");
+	cmd << key;
+	return Int(cmd);	
+}
+
+int aRedisClient::sadd(const AStr& key, const AVec<AStr>& members)
+{
+	if (members.empty())
+		return 0;
+
+	aRedisCmdMaker cmd("SADD");
+	cmd << key << members;
+	return Int(cmd);
+}
+
+int aRedisClient::sdiff(const AVec<AStr>& keys, ASet<AStr>& s)
+{
+	s.clear();
+	if (keys.empty())
+		return 0;
+
+	aRedisCmdMaker cmd("SDIFF");
+	cmd << keys;
+	return Set(cmd, s);
+}
+
+int aRedisClient::sdiffstore(const AStr& destination, const AVec<AStr>& keys)
+{
+	aRedisCmdMaker cmd("SDIFFSTORE");
+	cmd << destination << keys;
+	return Int(cmd);
+}
+
+int aRedisClient::sinter(const AVec<AStr>& keys, ASet<AStr>& s)
+{
+	s.clear();
+	if (keys.empty())
+		return 0;
+
+	aRedisCmdMaker cmd("SINTER");
+	cmd << keys;
+	return Set(cmd, s);
+}
+
+int aRedisClient::sinterstore(const AStr& destination, const AVec<AStr>& keys)
+{
+	aRedisCmdMaker cmd("SINTERSTORE");
+	cmd << destination << keys;
+	return Int(cmd);
+}
+
+int aRedisClient::smembers(const AStr& key, ASet<AStr>& members)
+{
+	aRedisCmdMaker cmd("SMEMBERS");
+	cmd << key;
+	return Set(cmd, members);
+}
+
+int aRedisClient::sismember(const AStr& key, const AStr& member)
+{
+	aRedisCmdMaker cmd("SISMEMBER");
+	cmd << key << member;
+	return Int(cmd);
+}
+
+int aRedisClient::smove(const AStr& source, const AStr& destination, const AStr& member)
+{
+	aRedisCmdMaker cmd("SMOVE");
+	cmd << source << destination << member;
+	return Int(cmd);
+}
+
+int aRedisClient::spop(const AStr& key, AStr& member)
+{
+	aRedisCmdMaker cmd("SPOP");
+	cmd << key;
+	return String(cmd, member);
+}
+
+int aRedisClient::srandmember(const AStr& key, const int count, AVec<AStr>& members)
+{
+	aRedisCmdMaker cmd("SRANDMEMBER");
+	cmd << key << count;
+	return Vec(cmd, members);
+}
+
+int aRedisClient::srem(const AStr& key, const AStr& member)
+{
+	aRedisCmdMaker cmd("SREM");
+	cmd << key << member;
+	return Int(cmd);
+}
+
+int aRedisClient::sunion(const AVec<AStr>& keys, ASet<AStr>& s)
+{
+	s.clear();
+	if (keys.empty())
+		return 0;
+
+	aRedisCmdMaker cmd("SUNION");
+	cmd << keys;
+	return Set(cmd, s);
+}
+
+int aRedisClient::sunionstore(const AStr& destination, const AVec<AStr>& keys)
+{
+	aRedisCmdMaker cmd("SUNIONSTORE");
+	cmd << destination << keys;
+	return Int(cmd);	
+}
+
+// hash command
+int aRedisClient::hget(const AStr& key, const AStr& field, AStr& value)
+{
+	aRedisCmdMaker cmd("HGET");
+	cmd << key << field;
+	return String(cmd, value);
+}
+
+int aRedisClient::hmget(const AStr& key, const AVec<AStr>& fields, REDIS_HASH_MAP& h)
+{
+	aRedisCmdMaker cmd("HMGET");
+	cmd << key << fields;
+	return HMap(cmd, fields, h);
+}
+
+int aRedisClient::hset(const AStr& key, const AStr& field, const AStr& value)
+{
+	aRedisCmdMaker cmd("HSET");
+	cmd << key << field << value;
+	return Int(cmd);
+}
+
+bool aRedisClient::hmset(const AStr& key, const REDIS_HASH_MAP & h)
+{
+	aRedisCmdMaker cmd("HMSET");
+	cmd << key << h;
+	return Ok(cmd);
+}
+
+int aRedisClient::hsetnx(const AStr& key, const AStr& field, const AStr& value)
+{
+	aRedisCmdMaker cmd("HSETNX");
+	cmd << key << field << value;
+	return Int(cmd);	
+}
+
+int aRedisClient::hexists(const AStr& key, const AStr& field)
+{
+	aRedisCmdMaker cmd("HEXISTS");
+	cmd << key << field;
+	return Int(cmd);
+}
+
+int aRedisClient::hincrby(const AStr& key, const AStr& field, const int increment)
+{
+	aRedisCmdMaker cmd("HINCRBY");
+	cmd << key << field << increment;
+	return Int(cmd);
+}
+
+float aRedisClient::hincrbyfloat(const AStr& key, const AStr& filed, const float increment)
+{
+	aRedisCmdMaker cmd("HINCRBYFLOAT");
+	cmd << key << filed << increment;
+	return Float(cmd);
+}
+
+int aRedisClient::hkeys(const AStr& key, AVec<AStr>& fields)
+{
+	aRedisCmdMaker cmd("HKEYS");
+	cmd << key;
+	return Vec(cmd, fields);
+}
+
+int aRedisClient::hvals(const AStr& key, AVec<AStr>& values)
+{
+	aRedisCmdMaker cmd("HVALS");
+	cmd << key;
+	return Vec(cmd, values);
+}
+
+int aRedisClient::hgetall(const AStr& key,REDIS_HASH_MAP& h)
+{
+	aRedisCmdMaker cmd("HGETALL");
+	cmd << key;
+	return HMap(cmd, h);
+}
+
+int aRedisClient::hlen(const AStr& key)
+{
+	aRedisCmdMaker cmd("HLEN");
+	cmd << key;
+	return Int(cmd);
+}
+
+// list command
+int aRedisClient::blpop(const AVec<AStr>& keys, const int timeout, AVec<AStr>& values)
+{
+	aRedisCmdMaker cmd("BLPOP");
+	cmd << keys << timeout;
+	return Vec(cmd, values);
+}
+
+int aRedisClient::linsert(const AStr& key, InsertDirection direction, const int pivot, const AStr& value)
+{
+	aRedisCmdMaker cmd("LINSERT");
+	cmd << key << insert_direction_str[direction] << pivot << value;
+	return Int(cmd);
+}
+
+int aRedisClient::lindex(const AStr& key, const int index, AStr& value)
+{
+	aRedisCmdMaker cmd("LINDEX");
+	cmd << key << index;
+	return String(cmd, value);
+}
+
+int aRedisClient::llen(const AStr& key)
+{
+	aRedisCmdMaker cmd("LLEN");
+	cmd << key;
+	return Int(cmd);	
+}
+
+
+int aRedisClient::lpop(const AStr& key, AStr& value)
+{
+	aRedisCmdMaker cmd("LPOP");
+	cmd << key;
+	return String(cmd, value);
+}
+
+int aRedisClient::lpush(const AStr& key, const AVec<AStr>& values)
+{
+	aRedisCmdMaker cmd("LPUSH");
+	cmd << key << values;
+	return Int(cmd);
+}
+
+int aRedisClient::lpushx(const AStr& key, const AStr& value)
+{
+	aRedisCmdMaker cmd("LPUSHX");
+	cmd << key << value;
+	return Int(cmd);
+}
+
+int aRedisClient::lrange(const AStr& key, const int start, const int stop, AVec<AStr>& values)
+{
+	aRedisCmdMaker cmd("LRANGE");
+	cmd << key << start << stop;
+	return Vec(cmd, values);
+}
+
+int aRedisClient::lrem(const AStr& key, const int count, const AStr& value)
+{
+	aRedisCmdMaker cmd("LREM");
+	cmd << key << count << value;
+	return Int(cmd);
+}
+
+bool aRedisClient::lset(const AStr& key, const int count, const AStr& value)
+{
+	aRedisCmdMaker cmd("LSET");
+	cmd << key << count << value;
+	return Ok(cmd);
+}
+
+bool aRedisClient::ltrim(const AStr& key, const int start, const int stop)
+{
+	aRedisCmdMaker cmd("LTRIM");
+	cmd << key << start << stop;
+	return Ok(cmd);
+}
+
+int aRedisClient::rpop(const AStr& key, AStr& value)
+{
+	aRedisCmdMaker cmd("RPOP");
+	cmd << key;
+	return String(cmd, value);
+}
+
+int aRedisClient::rpoplpush(const AStr& source, const AStr& destination, AVec<AStr>& values)
+{
+	aRedisCmdMaker cmd("RPOPLPUSH");
+	cmd << source << destination;
+	return Vec(cmd, values);
+}
+
+int aRedisClient::brpoplpush(const AStr& source, const AStr& destination, const int timeout, AVec<AStr>& values)
+{
+	aRedisCmdMaker cmd("BRPOPLPUSH");
+	cmd << source << destination << timeout;
+	return Vec(cmd, values);
+}
+
+int aRedisClient::rpush(const AStr& key, const AVec<AStr>& values)
+{
+	aRedisCmdMaker cmd("RPUSH");
+	cmd << key << values;
+	return Int(cmd);
+}
+
+int aRedisClient::rpushx(const AStr& key, const AStr& value)
+{
+	aRedisCmdMaker cmd("RPUSHX");
+	cmd << key << value;
+	return Int(cmd);
+}
+
+int aRedisClient::publish(const AStr& channel, const AStr& message)
+{
+	aRedisCmdMaker cmd("PUBLISH");
+	cmd << channel << message;
+	return Int(cmd);
+}
+

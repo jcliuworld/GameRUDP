@@ -1,0 +1,689 @@
+K 25
+svn:wc:ra_dav:version-url
+V 28
+/svn/age_sdk/!svn/ver/34/sdk
+END
+aMemStream.h
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/1/sdk/aMemStream.h
+END
+aGlobal.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aGlobal.cpp
+END
+Makefile.in
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/36/sdk/Makefile.in
+END
+aRedisResult.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/svn/age_sdk/!svn/ver/8/sdk/aRedisResult.cpp
+END
+aRedisClient.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 45
+/svn/age_sdk/!svn/ver/17/sdk/aRedisClient.cpp
+END
+aShareMem.h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aShareMem.h
+END
+aBits.h
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/age_sdk/!svn/ver/36/sdk/aBits.h
+END
+aThread.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aThread.cpp
+END
+aTCPServic.h
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/1/sdk/aTCPServic.h
+END
+aSingleton.h
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/1/sdk/aSingleton.h
+END
+aHttpTask.h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aHttpTask.h
+END
+aMiniTCPClient.h
+K 25
+svn:wc:ra_dav:version-url
+V 45
+/svn/age_sdk/!svn/ver/16/sdk/aMiniTCPClient.h
+END
+aNetService.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/age_sdk/!svn/ver/1/sdk/aNetService.cpp
+END
+aTCPTaskPool.h
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/age_sdk/!svn/ver/1/sdk/aTCPTaskPool.h
+END
+aLuaBase.cpp.bak
+K 25
+svn:wc:ra_dav:version-url
+V 45
+/svn/age_sdk/!svn/ver/29/sdk/aLuaBase.cpp.bak
+END
+aDebugService.h
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/age_sdk/!svn/ver/1/sdk/aDebugService.h
+END
+aSerialization.h
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/svn/age_sdk/!svn/ver/1/sdk/aSerialization.h
+END
+aEntryM.h
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/age_sdk/!svn/ver/1/sdk/aEntryM.h
+END
+aTimeWheel.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/age_sdk/!svn/ver/1/sdk/aTimeWheel.cpp
+END
+aUser.h
+K 25
+svn:wc:ra_dav:version-url
+V 35
+/svn/age_sdk/!svn/ver/1/sdk/aUser.h
+END
+aLogger.h
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/age_sdk/!svn/ver/1/sdk/aLogger.h
+END
+aSceneEntry.h
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/age_sdk/!svn/ver/36/sdk/aSceneEntry.h
+END
+aTCPClient.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/age_sdk/!svn/ver/1/sdk/aTCPClient.cpp
+END
+aPython.h
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/age_sdk/!svn/ver/23/sdk/aPython.h
+END
+aNineScreenIndex.h
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/svn/age_sdk/!svn/ver/33/sdk/aNineScreenIndex.h
+END
+aCond.h
+K 25
+svn:wc:ra_dav:version-url
+V 35
+/svn/age_sdk/!svn/ver/1/sdk/aCond.h
+END
+ErrorCode.h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/ErrorCode.h
+END
+aMTCPService.h
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/age_sdk/!svn/ver/1/sdk/aMTCPService.h
+END
+aMNetService.h
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/age_sdk/!svn/ver/1/sdk/aMNetService.h
+END
+Age.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 35
+/svn/age_sdk/!svn/ver/1/sdk/Age.cpp
+END
+aGlobalClient.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 46
+/svn/age_sdk/!svn/ver/31/sdk/aGlobalClient.cpp
+END
+aUserM.h
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/age_sdk/!svn/ver/1/sdk/aUserM.h
+END
+aTCPServic.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/age_sdk/!svn/ver/1/sdk/aTCPServic.cpp
+END
+aHttpTask.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/age_sdk/!svn/ver/1/sdk/aHttpTask.cpp
+END
+aMiniTCPClient.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 46
+/svn/age_sdk/!svn/ver/1/sdk/aMiniTCPClient.cpp
+END
+aTime.h
+K 25
+svn:wc:ra_dav:version-url
+V 35
+/svn/age_sdk/!svn/ver/1/sdk/aTime.h
+END
+aMsgCallBack.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/svn/age_sdk/!svn/ver/1/sdk/aMsgCallBack.cpp
+END
+aService.h
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/age_sdk/!svn/ver/1/sdk/aService.h
+END
+aConfig.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aConfig.cpp
+END
+aEntry.h
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/age_sdk/!svn/ver/36/sdk/aEntry.h
+END
+list.txt
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/age_sdk/!svn/ver/1/sdk/list.txt
+END
+aComponent.h
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/age_sdk/!svn/ver/36/sdk/aComponent.h
+END
+aTCPTask.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/1/sdk/aTCPTask.cpp
+END
+aRedisResult.h
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/age_sdk/!svn/ver/8/sdk/aRedisResult.h
+END
+aRedisClient.h
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/age_sdk/!svn/ver/8/sdk/aRedisClient.h
+END
+aTableDef.h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aTableDef.h
+END
+aThread.h
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/age_sdk/!svn/ver/1/sdk/aThread.h
+END
+aNetService.h
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/age_sdk/!svn/ver/1/sdk/aNetService.h
+END
+des.h
+K 25
+svn:wc:ra_dav:version-url
+V 33
+/svn/age_sdk/!svn/ver/1/sdk/des.h
+END
+aLuaBase.h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/32/sdk/aLuaBase.h
+END
+aMNetService.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/svn/age_sdk/!svn/ver/1/sdk/aMNetService.cpp
+END
+aMTCPService.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/svn/age_sdk/!svn/ver/1/sdk/aMTCPService.cpp
+END
+run.bat
+K 25
+svn:wc:ra_dav:version-url
+V 35
+/svn/age_sdk/!svn/ver/1/sdk/run.bat
+END
+aUniqueID.h
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/33/sdk/aUniqueID.h
+END
+aTimeWheel.h
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/1/sdk/aTimeWheel.h
+END
+aBase64.h
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/age_sdk/!svn/ver/1/sdk/aBase64.h
+END
+aDBConnectPool.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 46
+/svn/age_sdk/!svn/ver/1/sdk/aDBConnectPool.cpp
+END
+aTCPClient.h
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/age_sdk/!svn/ver/16/sdk/aTCPClient.h
+END
+aSocket.h
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/age_sdk/!svn/ver/1/sdk/aSocket.h
+END
+aTime.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/age_sdk/!svn/ver/1/sdk/aTime.cpp
+END
+aService.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/1/sdk/aService.cpp
+END
+aFunc.h
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/age_sdk/!svn/ver/34/sdk/aFunc.h
+END
+Age.h
+K 25
+svn:wc:ra_dav:version-url
+V 33
+/svn/age_sdk/!svn/ver/1/sdk/Age.h
+END
+aHttpTaskPool.h
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/age_sdk/!svn/ver/1/sdk/aHttpTaskPool.h
+END
+aEntryBase.h
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/age_sdk/!svn/ver/36/sdk/aEntryBase.h
+END
+aComponent.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/age_sdk/!svn/ver/36/sdk/aComponent.cpp
+END
+aDef.h
+K 25
+svn:wc:ra_dav:version-url
+V 35
+/svn/age_sdk/!svn/ver/36/sdk/aDef.h
+END
+aEventM.h
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/age_sdk/!svn/ver/1/sdk/aEventM.h
+END
+aGlobalClient.h
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/svn/age_sdk/!svn/ver/31/sdk/aGlobalClient.h
+END
+aRWLock.h
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/age_sdk/!svn/ver/1/sdk/aRWLock.h
+END
+aTableDef.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/age_sdk/!svn/ver/1/sdk/aTableDef.cpp
+END
+aUrl.h
+K 25
+svn:wc:ra_dav:version-url
+V 35
+/svn/age_sdk/!svn/ver/21/sdk/aUrl.h
+END
+aMsgCallBack.h
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/age_sdk/!svn/ver/16/sdk/aMsgCallBack.h
+END
+aArg.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/age_sdk/!svn/ver/1/sdk/aArg.cpp
+END
+aRedisCommand.h
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/age_sdk/!svn/ver/8/sdk/aRedisCommand.h
+END
+aConfig.h
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/age_sdk/!svn/ver/1/sdk/aConfig.h
+END
+aLuaBase.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/age_sdk/!svn/ver/28/sdk/aLuaBase.cpp
+END
+aTCPTask.h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/16/sdk/aTCPTask.h
+END
+aIni.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/age_sdk/!svn/ver/1/sdk/aIni.cpp
+END
+aRedisConnectPool.h
+K 25
+svn:wc:ra_dav:version-url
+V 48
+/svn/age_sdk/!svn/ver/12/sdk/aRedisConnectPool.h
+END
+aTCPClientPool.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 46
+/svn/age_sdk/!svn/ver/1/sdk/aTCPClientPool.cpp
+END
+aVars.h
+K 25
+svn:wc:ra_dav:version-url
+V 35
+/svn/age_sdk/!svn/ver/1/sdk/aVars.h
+END
+aXMLReader.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/age_sdk/!svn/ver/1/sdk/aXMLReader.cpp
+END
+aBase64.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aBase64.cpp
+END
+aMsgParse.h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aMsgParse.h
+END
+aEvent.h
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/age_sdk/!svn/ver/1/sdk/aEvent.h
+END
+aSocket.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aSocket.cpp
+END
+aHttpTaskPool.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 45
+/svn/age_sdk/!svn/ver/1/sdk/aHttpTaskPool.cpp
+END
+aTable.h
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/age_sdk/!svn/ver/1/sdk/aTable.h
+END
+aTimeWarp.h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aTimeWarp.h
+END
+aVarsM .h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aVarsM%20.h
+END
+aDBConnectPool.h
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/svn/age_sdk/!svn/ver/1/sdk/aDBConnectPool.h
+END
+aEventM.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aEventM.cpp
+END
+aShareMem.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/age_sdk/!svn/ver/1/sdk/aShareMem.cpp
+END
+aTCPTaskPool.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/svn/age_sdk/!svn/ver/1/sdk/aTCPTaskPool.cpp
+END
+aGlobal.h
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/age_sdk/!svn/ver/1/sdk/aGlobal.h
+END
+aVec3.h
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/age_sdk/!svn/ver/36/sdk/aVec3.h
+END
+aPos.h
+K 25
+svn:wc:ra_dav:version-url
+V 35
+/svn/age_sdk/!svn/ver/36/sdk/aPos.h
+END
+aMutex.h
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/age_sdk/!svn/ver/1/sdk/aMutex.h
+END
+aDebugService.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 45
+/svn/age_sdk/!svn/ver/1/sdk/aDebugService.cpp
+END
+aRedisConnectPool.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/age_sdk/!svn/ver/14/sdk/aRedisConnectPool.cpp
+END
+aLuaBase.h.bak
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/age_sdk/!svn/ver/29/sdk/aLuaBase.h.bak
+END
+aArg.h
+K 25
+svn:wc:ra_dav:version-url
+V 34
+/svn/age_sdk/!svn/ver/1/sdk/aArg.h
+END
+aLogger.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/age_sdk/!svn/ver/1/sdk/aLogger.cpp
+END
+aPython.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/19/sdk/aPython.cpp
+END
+aNineScreenIndex.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 49
+/svn/age_sdk/!svn/ver/36/sdk/aNineScreenIndex.cpp
+END
+aNoneCopyable.h
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/age_sdk/!svn/ver/1/sdk/aNoneCopyable.h
+END
+aCond.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/age_sdk/!svn/ver/1/sdk/aCond.cpp
+END
+aIni.h
+K 25
+svn:wc:ra_dav:version-url
+V 34
+/svn/age_sdk/!svn/ver/1/sdk/aIni.h
+END
+aTCPClientPool.h
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/svn/age_sdk/!svn/ver/1/sdk/aTCPClientPool.h
+END
+Makefile.am
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/36/sdk/Makefile.am
+END
+aTimeWarp.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/age_sdk/!svn/ver/1/sdk/aTimeWarp.cpp
+END
+aXMLReader.h
+K 25
+svn:wc:ra_dav:version-url
+V 40
+/svn/age_sdk/!svn/ver/1/sdk/aXMLReader.h
+END
+aUserM.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/age_sdk/!svn/ver/1/sdk/aUserM.cpp
+END

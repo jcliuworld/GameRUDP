@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="GB2312"?>
+<Age>
+	<global>
+		<log>debug</log>
+		<mysql>mysql://ljc:123456@192.168.0.110:3306/db_ljc:4</mysql>
+		<globalserver port="10000">192.168.0.110</globalserver>
+		<ifname>eth0</ifname>
+		<dbdesc>DBdesc.xml</dbdesc>
+	</global>
+	<DemoServer>
+		 <logfilename>~/log/demo.log</logfilename>
+	</DemoServer>
+</Age>
+

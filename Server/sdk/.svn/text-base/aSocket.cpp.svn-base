@@ -1,0 +1,697 @@
+#include "aSocket.h"
+#include "aMemStream.h"
+/** 
+* @file aSocket.cpp
+* @brief  套接口封装
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-14
+*/
+
+const int aSocket::T_RD_MSEC   =       2100;
+const int aSocket::T_WR_MSEC   =       5100;
+const unsigned int aSocket::PH_LEN     =       sizeof(unsigned int);
+const unsigned int aSocket::PACKET_ZIP_MIN    =       32;
+const unsigned int aSocket::PACKET_ZIP 	=   0x40000000;
+const unsigned int aSocket::INCOMPLETE_READ   =       0x00000001;
+const unsigned int aSocket::INCOMPLETE_WRITE   =       0x00000002;
+const unsigned int aSocket::PACKET_MASK = _BLOCKSIZE - 1;
+const unsigned int aSocket::MAX_DATABUFFERSIZE = PACKET_MASK;
+const unsigned int aSocket::MAX_DATASIZE = (MAX_DATABUFFERSIZE - PH_LEN);
+const unsigned int aSocket::MAX_USERDATASIZE = (MAX_DATASIZE -128);
+
+template <>
+stBufferCmdQueue::aMemStream():_maxSize(_BLOCKSIZE),_offPtr(0),_currPtr(0),_buffer(_maxSize)
+{
+
+}
+
+template <>
+stStackCmdQueue::aMemStream():_maxSize(PACKET_ZIP_BUFFER),_offPtr(0),_currPtr(0)
+{
+
+}
+
+aSocket::aSocket(const int sock, const struct sockaddr_in * addr /* = NULL */,const bool compress /* = false */)
+{
+	assert( -1 != sock );
+
+	this->sock = sock;
+
+	bzero(&this->addr,sizeof(struct sockaddr_in));
+
+	if ( NULL == addr)
+	{
+		socklen_t len = sizeof(struct sockaddr);
+		getpeername(this->sock,(struct sockaddr *)&this->addr ,&len);
+	} 
+	else
+	{
+		bcopy(addr,&this->addr,sizeof(struct sockaddr_in));
+	}
+
+	bzero(&this->localaddr,sizeof(struct sockaddr_in));
+
+	{
+		socklen_t len = sizeof(struct sockaddr);
+		getpeername(this->sock,(struct sockaddr *)&this->localaddr ,&len);
+	}
+
+	fcntl(this->sock,F_SETFD,fcntl(this->sock,F_GETFD,0)|FD_CLOEXEC );
+
+	setNonblock();
+
+	rd_msec = T_RD_MSEC;
+
+	wr_msec = T_WR_MSEC;
+
+	_rcv_raw_size = 0;
+
+	_curren_cmd = 0 ;
+
+	setFlag(INCOMPLETE_READ|INCOMPLETE_WRITE);
+
+	bitmask = 0;
+
+	if (compress)
+		bitmask |= PACKET_ZIP;
+	debug_offPtr = debug_currPtr = debug_max_size = debug_wait_size = 0;
+
+}
+
+aSocket::~aSocket()
+{
+	Age::logger->debug(" the socket is closed");
+	::shutdown(sock,SHUT_RDWR);
+	TEMP_FAILURE_RETRY(::close(sock));
+
+	sock = -1;
+}
+
+#define success_unpack() \
+	do { \
+		if( _rcv_raw_size >= packetMinSize())\
+			{\
+				unsigned int iRecordLen = packetSize(_rcv_queue.rdBuf());\
+				if(_rcv_raw_size >= iRecordLen )\
+					{\
+						int retval = packetUnPack(_rcv_queue.rdBuf(),iRecordLen,(unsigned char *)pstrCmd );\
+						_rcv_queue.rdFlip(iRecordLen);\
+						_rcv_raw_size -= iRecordLen;\
+						return retval;\
+					}\
+			}\
+	}while(0)
+
+int aSocket::recvToCmd(void * pstrCmd, const int iCmd,const bool wait)
+{
+	success_unpack();
+	do 
+	{
+		int retval = recvToBuf();
+
+		if ( -1 == retval || ( 0 == retval && !wait ) )
+			return retval;
+
+		success_unpack();
+	} while (true);
+
+	return 0;
+
+}
+int aSocket::sendRawData(const void * pBuffer,const int iSize)
+{
+	int retcode = 0;
+	if (issetFlag(INCOMPLETE_WRITE))
+	{
+		clearFlag(INCOMPLETE_WRITE);
+		goto do_select;
+	}
+
+	retcode = TEMP_FAILURE_RETRY(::send(sock,pBuffer,iSize,MSG_NOSIGNAL));
+
+	if (retcode == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+	{
+do_select:
+				retcode = waitForWrite();
+				if ( 1 == retcode )
+					retcode = TEMP_FAILURE_RETRY(::send(sock,pBuffer,iSize,MSG_NOSIGNAL));
+				else
+					return retcode;
+	}
+
+	if ( retcode > 0 && retcode < iSize)
+				setFlag(INCOMPLETE_WRITE);
+
+	return retcode;
+}
+bool aSocket::sendRawDataIM(const void * pBuffer,const int iSize)
+{
+	if( NULL == pBuffer || iSize <=0 )
+		return false;
+	int offset = 0;
+	
+	do
+	{
+		int retcode = sendRawData(&((char *)pBuffer)[offset],iSize - offset);
+		if(retcode == -1)
+			return false;
+		offset += retcode;
+	}while(offset < iSize);
+	
+	return (offset == iSize);
+}
+bool aSocket::sendCmd(const void * pstrCmd, const int iCmd,const bool buffer /* =false */)
+{
+	if (NULL == pstrCmd || iCmd <= 0 )
+		return false;
+
+	bool retval  = true;
+
+	if (buffer)
+	{
+		stStackCmdQueue _raw_queue;
+		packetAppendNoEnc(pstrCmd,iCmd,_raw_queue);
+
+		mutex.lock();
+		_snd_queue.put(_raw_queue.rdBuf(),_raw_queue.rdSize());
+		_curren_cmd = _raw_queue.rdSize();
+		mutex.unlock();
+	}
+	else
+	{
+		stStackCmdQueue _raw_queue;
+		packetAppend(pstrCmd,iCmd,_raw_queue);
+		mutex.lock();
+		retval = sendRawDataIM(_raw_queue.rdBuf(),_raw_queue.rdSize());
+		mutex.unlock();
+	}
+	return retval;
+}
+bool aSocket::sendCmd(const std::string & send,const bool buffer )
+{
+	if( send.empty())
+		return false;
+	return sendCmd(send.c_str(),send.size(),buffer);	
+}
+/*bool aSocket::sendCmd(const MSG * msg,const bool buffer)
+{
+	if(NULL == msg)
+		return false;
+	std::string strmsg ;
+	encode(msg,strmsg);
+	return sendCmd(strmsg.c_str(),strmsg.size(),buffer);	
+			
+}*/
+/**
+ * @brief send msg use string 
+ *
+ * @param msgname
+ * @param msg
+ * @param buffer
+ *
+ * @return 
+ */
+/*bool aSocket::sendCmd(const std::string & msgname,const std::string & msg,const bool buffer)
+{
+	std::string strmsg ;
+	encode(msgname,msg,strmsg);
+	return sendCmd(strmsg.c_str(),strmsg.size(),buffer);	
+
+}*/
+bool aSocket::sendCmdNoPack(const void * pstrCmd, const int iCmd,const bool buffer /* =false */)
+{
+	if ( NULL == pstrCmd || iCmd <= 0 )
+			return false;
+
+	bool retval = true;
+	if (buffer)
+	{
+		mutex.lock();
+		_snd_queue.put((unsigned char *)pstrCmd,iCmd);
+		_curren_cmd = iCmd;
+		mutex.unlock();
+	}
+	else
+	{
+		if (needenc())
+		{
+			stStackCmdQueue _raw_queue;
+			_raw_queue.put((unsigned char *)pstrCmd,iCmd);
+			packetPackEnc(_raw_queue,_raw_queue.rdSize());
+			mutex.lock();
+			retval = sendRawDataIM(_raw_queue.rdBuf(),_raw_queue.rdSize());
+			mutex.unlock();
+		}
+		else
+		{
+			mutex.lock();
+			retval = sendRawDataIM(pstrCmd,iCmd);
+			mutex.unlock();
+		}
+	}
+
+	return retval;
+}
+
+bool aSocket::sendCmdNoPack(std::string &out,const bool buffer)
+{
+	return sendCmdNoPack(out.c_str(),out.size(),buffer);
+}	
+/*bool aSocket::sendCmdNoPack(const MSG * msg,const bool buffer)
+{
+	std::string strmsg;
+	encode(msg,strmsg);
+        return sendCmdNoPack(strmsg.c_str(),sizeof(strmsg.c_str()),buffer);
+}*/
+bool aSocket::sync()
+{
+	if (needenc())
+	{
+		unsigned int iSize = 0,current_cmd = 0 , offset = 0;
+
+		mutex.lock();
+		if (_snd_queue.rdReady())
+		{
+			iSize = _snd_queue.rdSize();
+			current_cmd = _curren_cmd;
+
+			offset = _enc_queue.rdSize();
+
+			debug_offPtr = _enc_queue.offPtr();
+			debug_currPtr = _enc_queue.currPtr();
+			debug_max_size = _enc_queue.maxSize();
+			debug_wait_size = iSize;
+
+			_enc_queue.put(_snd_queue.rdBuf(),iSize);
+			_snd_queue.rdFlip(iSize);
+			_curren_cmd = 0;
+		}
+		mutex.unlock();
+		if (iSize)
+			packetPackEnc(_enc_queue,current_cmd,offset);
+		if ( _enc_queue.rdReady())
+		{
+			int retcode = sendRawDataNoPoll(_enc_queue.rdBuf(),_enc_queue.rdSize());
+			if (retcode > 0)
+			{
+				_enc_queue.rdFlip(retcode);
+			}else if( -1 == retcode)
+			{
+				return false;
+			}
+		}
+
+	} 
+	else
+	{
+		mutex.lock();
+		if (_snd_queue.rdReady())
+		{
+			_enc_queue.put(_snd_queue.rdBuf(),_snd_queue.rdSize());
+			_snd_queue.rdFlip(_snd_queue.rdSize());
+		}
+		mutex.unlock();
+
+		if (_enc_queue.rdReady())
+		{
+			int recode = sendRawDataNoPoll(_enc_queue.rdBuf(),_enc_queue.rdSize());
+			if ( recode > 0 )
+			{
+				_enc_queue.rdFlip(recode);
+			}else if( -1 == recode)
+			{
+				return false;
+			}
+		}
+		
+	}
+	return true;
+}
+
+void  aSocket::force_sync()
+{
+	if (needenc())
+	{
+		unsigned int iSize = 0,current_cmd = 0 , offset = 0;
+
+		mutex.lock();
+		if (_snd_queue.rdReady())
+		{
+			iSize = _snd_queue.rdSize();
+			current_cmd = _curren_cmd;
+
+			offset = _enc_queue.rdSize();
+
+			_enc_queue.put(_snd_queue.rdBuf(),iSize);
+			_snd_queue.rdFlip(iSize);
+			_curren_cmd = 0;
+		}
+		mutex.unlock();
+		if (iSize)
+			packetPackEnc(_enc_queue,current_cmd,offset);
+		if ( _enc_queue.rdReady())
+		{
+			sendRawDataIM(_enc_queue.rdBuf(),_enc_queue.rdSize());
+			_enc_queue.reset();
+		}
+
+	} 
+	else
+	{
+		mutex.lock();
+		if (_snd_queue.rdReady())
+		{
+			_enc_queue.put(_snd_queue.rdBuf(),_snd_queue.rdSize());
+			_snd_queue.rdFlip(_snd_queue.rdSize());
+		}
+		mutex.unlock();
+
+		if (_enc_queue.rdReady())
+		{
+			sendRawDataIM(_enc_queue.rdBuf(),_enc_queue.rdSize());
+			_enc_queue.reset();
+
+		}
+
+	}
+}
+
+int aSocket::checkIOForRead()
+{
+	struct pollfd pfd;
+
+	pfd.fd = sock;
+	pfd.events = POLLIN | POLLERR | POLLPRI;
+	pfd.revents = 0 ;
+
+	int recode = TEMP_FAILURE_RETRY(::poll(&pfd,1,0));
+	if ( recode > 0 && 0 == (pfd.revents & POLLIN))
+			recode = -1;
+	return recode;
+}
+int aSocket::checkIOForWrite()
+{
+	struct pollfd pfd;
+
+	pfd.fd = sock;
+	pfd.events = POLLOUT | POLLERR | POLLPRI;
+	pfd.revents = 0 ;
+
+	int recode = TEMP_FAILURE_RETRY(::poll(&pfd,1,0));
+	if ( recode > 0 && 0 == (pfd.revents & POLLOUT))
+		recode = -1;
+	return recode;
+}
+
+
+const char * aSocket::getIPByIfName(const char * ifName)
+{
+	int s;
+
+	struct ifreq ifr;
+
+	static const char * none_ip = "0.0.0.0";
+
+	if ( NULL == ifName )
+		return none_ip;
+	s = ::socket(AF_INET,SOCK_DGRAM,0);
+	if ( -1 == s)
+			return none_ip;
+	bzero(ifr.ifr_name,sizeof(ifr.ifr_name));
+	strncpy(ifr.ifr_name,ifName,sizeof(ifr.ifr_name) - 1);
+
+	if ( -1 == ioctl(s,SIOCGIFADDR,&ifr))
+	{
+		TEMP_FAILURE_RETRY(::close(s));
+		return none_ip;
+	}
+	TEMP_FAILURE_RETRY(::close(s));
+	return inet_ntoa(((struct sockaddr_in *) & ifr.ifr_addr)->sin_addr);
+}
+
+#define sucess_recv_and_dec()\
+	do {\
+	if ((unsigned int)retcode < _rcv_queue.wrSize())\
+	{\
+		setFlag(INCOMPLETE_READ);\
+	}\
+	_rcv_queue.wrFlip(retcode);\
+	unsigned int size = _rcv_queue.rdSize() - _rcv_raw_size - ((_rcv_queue.rdSize() - _rcv_raw_size )% 8);\
+	if (size)\
+	{\
+		enc.encdec(&_rcv_queue.rdBuf()[_rcv_raw_size],size,false);\
+		_rcv_raw_size += size;\
+	}\
+	}while(0)
+#define success_recv()\
+	do { \
+			if ((unsigned int) retcode < _rcv_queue.wrSize())\
+			{\
+				setFlag(INCOMPLETE_READ);\
+			}\
+			_rcv_queue.wrFlip(retcode);\
+			_rcv_raw_size += retcode;\
+	}while(0)
+
+
+#define strcmp_request() \
+        _rcv_queue.rdBuf()[1] == 'p' && \
+        _rcv_queue.rdBuf()[2] == 'o' && \
+        _rcv_queue.rdBuf()[3] == 'l' && \
+        _rcv_queue.rdBuf()[4] == 'i' && \
+        _rcv_queue.rdBuf()[5] == 'c' && \
+        _rcv_queue.rdBuf()[6] == 'y' && \
+        _rcv_queue.rdBuf()[13] == 'r' && \
+        _rcv_queue.rdBuf()[14] == 'e' && \
+        _rcv_queue.rdBuf()[15] == 'q' && \
+        _rcv_queue.rdBuf()[16] == 'u' && \
+        _rcv_queue.rdBuf()[17] == 'e' && \
+        _rcv_queue.rdBuf()[18] == 's' && \
+        _rcv_queue.rdBuf()[19] == 't'
+int aSocket::recvToBufNoPoll()
+{
+	int retcode = 0 ;
+	if (needenc())
+	{
+		_rcv_queue.wrReserve(MAX_DATABUFFERSIZE);
+		retcode = TEMP_FAILURE_RETRY(::recv(sock,_rcv_queue.wrBuf(),_rcv_queue.wrSize(),MSG_NOSIGNAL));
+		if(retcode == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+			return 0;
+		if(retcode > 0 )
+		{
+			sucess_recv_and_dec();
+			if (_rcv_queue.wrSize()>= 23 && strcmp_request())
+                        {
+                                verifyFlashSaftyBox();
+                        }
+		}
+	} 
+	else
+	{
+		_rcv_queue.wrReserve(MAX_DATABUFFERSIZE);
+		retcode = TEMP_FAILURE_RETRY(::recv(sock,_rcv_queue.wrBuf(),_rcv_queue.wrSize(),MSG_NOSIGNAL));
+		if(retcode == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+			return 0 ;
+		if(retcode > 0)
+		{
+			success_recv();
+			if (_rcv_queue.wrSize() >= 23 && strcmp_request())
+			{
+				verifyFlashSaftyBox();
+			}
+		}
+	}
+	if ( 0 == retcode )
+		return -1;
+	return retcode;
+}
+
+int aSocket::recvToCmdNoPoll(void * pstrCmd,const int iCmdLen)
+{
+	success_unpack();
+	return 0;
+}
+/**
+ * @brief 
+ *
+ * @param pstrCmd
+ * @param iCmdLen
+ *
+ * @return 
+ */
+int aSocket::recvToNoPackNoPoll(void * pstrCmd ,const unsigned int iCmdLen)
+{
+	DWORD iRecvCmdLen = _rcv_queue.rdSize();
+	if(iCmdLen < iRecvCmdLen)
+		return -1;
+	bcopy(_rcv_queue.rdBuf(),pstrCmd,iRecvCmdLen);
+	_rcv_queue.rdFlip(iRecvCmdLen);
+	_rcv_raw_size -= iRecvCmdLen;
+
+	return iRecvCmdLen;
+}
+int aSocket::sendRawDataNoPoll(const void * pBuffer,const int iSize)
+{
+	int retcode = TEMP_FAILURE_RETRY(::send(sock,pBuffer,iSize,MSG_NOSIGNAL));
+	if( retcode == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+		return 0;
+	if( retcode > 0 && retcode < iSize)
+		setFlag(INCOMPLETE_WRITE);
+	return retcode;
+}
+
+bool aSocket::setNonblock()
+{
+	int fdFlags;
+	int nodelay = 1;
+
+	if(::setsockopt(sock,IPPROTO_TCP,TCP_NODELAY,(void *)&nodelay,sizeof(nodelay)))
+		return false;
+	fdFlags = ::fcntl(sock,F_GETFL,0);
+#if defined(O_NONBLOCK)
+	fdFlags |= O_NONBLOCK;
+#elif defined(O_NDELAY)
+	fdFlags |= O_NDELAY;
+#elif defined(FNDELAY)
+	fdFlags |= O_FNDELAY;
+#else
+	return false;
+#endif
+
+	if(::fcntl(sock,F_SETFL,fdFlags) == -1)
+		return false;
+	return true;
+}
+
+int aSocket::waitForRead()
+{
+	struct pollfd pfd;
+
+	pfd.fd = sock;
+	pfd.events = POLLIN | POLLERR | POLLPRI;
+	pfd.revents = 0 ;
+
+	int recode = TEMP_FAILURE_RETRY(::poll(&pfd,1,rd_msec));
+	if ( recode > 0 && 0 == (pfd.revents & POLLIN))
+		recode = -1;
+	return recode;
+
+}
+int aSocket::waitForWrite()
+{
+	struct pollfd pfd;
+
+	pfd.fd = sock;
+	pfd.events = POLLOUT | POLLERR | POLLPRI;
+	pfd.revents = 0 ;
+
+	int recode = TEMP_FAILURE_RETRY(::poll(&pfd,1,wr_msec));
+	if ( recode > 0 && 0 == (pfd.revents & POLLOUT))
+		recode = -1;
+	return recode;
+}
+
+int aSocket::recvToBuf()
+{
+	int retcode = 0 ;
+
+	if (needenc())
+	{
+		if (issetFlag(INCOMPLETE_READ))
+		{
+			clearFlag(INCOMPLETE_READ);
+				goto do_select_enc;
+		}
+		_rcv_queue.wrReserve(MAX_DATABUFFERSIZE);
+		retcode = TEMP_FAILURE_RETRY(::recv(sock,_rcv_queue.wrBuf(),_rcv_queue.wrSize(),MSG_NOSIGNAL));
+
+		if (retcode == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+		{
+do_select_enc:
+			retcode = waitForRead();
+			if( 1 == retcode )
+				retcode = TEMP_FAILURE_RETRY(::recv(sock,_rcv_queue.wrBuf(),_rcv_queue.wrSize(),MSG_NOSIGNAL));
+			else
+				return retcode;
+		}
+
+		if(retcode > 0 )
+			sucess_recv_and_dec();
+
+	} 
+	else
+	{
+		if (issetFlag(INCOMPLETE_READ))
+		{
+			clearFlag(INCOMPLETE_READ);
+				goto do_select;
+		}
+		_rcv_queue.wrReserve(MAX_DATABUFFERSIZE);
+		retcode = TEMP_FAILURE_RETRY(::recv(sock,_rcv_queue.wrBuf(),_rcv_queue.wrSize(),MSG_NOSIGNAL));
+		if(retcode == -1 && (errno == EAGAIN||errno == EWOULDBLOCK))
+		{
+do_select:
+			retcode = waitForRead();
+			if( 1== retcode)
+				retcode = TEMP_FAILURE_RETRY(::recv(sock,_rcv_queue.wrBuf(),_rcv_queue.wrSize(),MSG_NOSIGNAL));
+			else
+				return retcode;
+		}
+		if ( retcode > 0 )
+			success_recv();
+	}
+
+	if( 0 == retcode)
+		return -1;
+	return retcode;
+
+}
+
+unsigned int aSocket::packetUnPack(unsigned char * in, const unsigned int iPacketLen,unsigned char * out)
+{
+	unsigned int iRecvCmdLen = iPacketLen - PH_LEN;
+
+	if (PACKET_ZIP == ((*(unsigned int *)in) & PACKET_ZIP))
+	{
+		uLong nUnzipLen = MAX_DATASIZE;
+
+		int retcode = uncompress(out , &nUnzipLen,&(in[PH_LEN]),iRecvCmdLen);
+
+		switch(retcode)
+		{
+		case Z_OK:
+			break;
+		case Z_MEM_ERROR:
+			Age::logger->fatal("(%s)Z_MEM_ERROR",__FUNCTION__);
+			break;
+		case Z_BUF_ERROR:
+			Age::logger->fatal("(%s)Z_BUF_ERROR",__FUNCTION__);
+		case Z_DATA_ERROR:
+			Age::logger->fatal("(%s)Z_DATA_ERROR",__FUNCTION__);
+			break;
+		}
+		return nUnzipLen;
+	}
+	else
+	{
+		bcopy(&(in[PH_LEN]),out,iRecvCmdLen);
+		return iRecvCmdLen;
+	}
+}
+bool aSocket::verifyFlashSaftyBox()
+{
+
+        std::string xml = "<cross-domain-policy>";
+        xml += "<allow-access-from domain=\"*\" to-ports=\"*\" />";
+        xml += "</cross-domain-policy>";
+
+        char temp_buffer[1024]={0};
+        bcopy(xml.c_str(), temp_buffer, xml.length());
+        int retSend = TEMP_FAILURE_RETRY(::send(sock, temp_buffer, xml.length()+1 , MSG_NOSIGNAL));
+        if (retSend == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+        {
+                return false;
+        }
+        return true;
+
+}

@@ -1,0 +1,253 @@
+#include "aNineScreenIndex.h"
+/** 
+* @file aNineScreenIndex.cpp
+* @brief 九屏索引
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-20
+*/
+
+template <int MAX_X,int MAX_Y>
+NINESCREEN_MAP  aNineScreenIndex<MAX_X,MAX_Y>::_nineScreen;
+
+template <int MAX_X,int MAX_Y>
+NINESCREEN_MAP aNineScreenIndex<MAX_X,MAX_Y>::_directScreen[8];
+template <int MAX_X,int MAX_Y>
+NINESCREEN_MAP aNineScreenIndex<MAX_X,MAX_Y>::_reverDirectScreen[8];
+
+template <int MAX_X,int MAX_Y>
+aNineScreenIndex<MAX_X,MAX_Y>::aNineScreenIndex()
+{}
+
+template <int MAX_X,int MAX_Y>
+aNineScreenIndex<MAX_X,MAX_Y>::~aNineScreenIndex()
+{}
+
+/**
+* @brief 初始化函数 
+*
+* @param
+* @return
+*/
+
+template <int MAX_X, int MAX_Y>
+bool aNineScreenIndex<MAX_X,MAX_Y>::init()
+{
+	const int adjust[9][2] = {{0,-1},{1,-1},{1,0},{1,1},{0,1},{-1,1},{-1,0},{-1,-1},{0,0}};
+		
+	DWORD screenMax = MAX_X * MAX_Y;
+	
+	for (DWORD j = 0; j < screenMax ; j ++)
+	{
+		int nScreenX = j % MAX_X;
+		int nScreenY = j / MAX_X;
+		{
+			aPosIVector pv;
+			for (int i = 0 ; i < 9 ; i++)
+			{
+				int x = nScreenX + adjust[i][0];
+				int y = nScreenY + adjust[i][1];
+				if(x >=0 && y>=0 && x< (int)MAX_X && y < (int) MAX_Y )
+					pv.push_back( y * MAX_X + x);
+			}
+			_nineScreen.insert(std::make_pair(j,pv));
+		}
+		//正方向3屏和5屏
+		for(int dir = 0; dir < 8 ; dir ++)
+		{
+			int start,end;
+			aPosIVector pv;
+			if(1 == dir%2)	
+			{//正方向
+				start	=	6;
+				end	=	10;
+			}
+			else
+			{
+				start	=	7;
+				end	=	9;
+			}
+			for(int i = start; i <= end; i++)
+			{
+				int x = nScreenX + adjust[( i + dir ) % 8][0];
+				int y = nScreenY + adjust[( i + dir ) % 8][1];
+				
+				if( x >= 0 && y >=0 && x < MAX_X && y < MAX_Y )
+					pv.push_back(y*nScreenX + x);
+			}
+			_directScreen[dir].insert(NINESCREEN_MAP_VALUETYPE(j,pv));
+		}
+		//反方向3屏和5屏
+		for(int dir = 0; dir < 8 ; dir ++)
+		{
+			int start,end;
+			aPosIVector pv;
+			if(1 == dir%2)	
+			{//正方向
+				start	=	2;
+				end	=	6;
+			}
+			else
+			{
+				start	=	3;
+				end	=	5;
+			}
+			for(int i = start; i <= end; i++)
+			{
+				int x = nScreenX + adjust[( i + dir ) % 8][0];
+				int y = nScreenY + adjust[( i + dir ) % 8][1];
+				
+				if( x >= 0 && y >=0 && x < MAX_X && y < MAX_Y )
+					pv.push_back(y*nScreenX + x);
+			}
+			_reverDirectScreen[dir].insert(NINESCREEN_MAP_VALUETYPE(j,pv));
+		}
+	}
+	return true;
+}
+/**
+* @brief 获取指定屏索引的九屏索引 
+*
+* @param posi 屏编号
+* @return 九屏索引
+*/
+template <int MAX_X,int MAX_Y>
+const aPosIVector & aNineScreenIndex<MAX_X,MAX_Y>::getNineScreen(const aPosI & posi)
+{
+	NINESCREEN_MAP_ITER iter = _nineScreen.find((DWORD)posi);
+	
+	if(iter != _nineScreen.end())
+	{
+		return iter->second;
+	}	
+	return _nineScreen[(DWORD)-1];
+}
+/**
+* @brief 获取指定屏和方向的正向索引
+*
+* @param posi 屏索引
+* @param dir 方向
+* @return 索引列表
+*/
+template <int MAX_X,int MAX_Y>
+const aPosIVector & aNineScreenIndex<MAX_X,MAX_Y>::getDirectScreen(const aPosI & posi , const int dir)
+{
+	NINESCREEN_MAP_ITER iter = _directScreen[dir].find((DWORD)posi);
+	if(iter != _directScreen[dir].end())
+	{
+		return iter->second;
+	}
+	return _directScreen[dir][(DWORD) - 1 ];
+}
+/**
+* @brief 获取指定屏和方向的反向索引 
+*
+* @param posi 屏索引
+* @param dir 方向
+* @return 索引列表
+*/
+template <int MAX_X,int MAX_Y>
+const aPosIVector & aNineScreenIndex<MAX_X,MAX_Y>::getReverDirectScreen(const aPosI & posi, const int dir)
+{
+	NINESCREEN_MAP_ITER iter = _reverDirectScreen[dir].find((DWORD)posi);
+	if(iter != _reverDirectScreen[dir].end())
+	{
+		return iter->second;
+	}
+	return _reverDirectScreen[dir][(DWORD) - 1];
+}
+/**
+* @brief 刷新进入对象的索引 
+*
+* @param entry 进入对象
+* @param newIndex 索引
+* @return true 成功 false 失败
+*/
+template <int MAX_X,int MAX_Y>
+bool aNineScreenIndex<MAX_X,MAX_Y>::refresh(aSceneEntry * entry,const DWORD newIndex)
+{
+	aRWLockAutoScopeRW wrlockScope(_rwlock);
+
+	if (NULL == entry) return false;
+
+	if(entry->getScreenIndex() == (DWORD) -2 && newIndex != (DWORD)-1 )return false;
+	
+	if(entry->hasInScene())
+	{
+		bool ret = false;
+		SCENEENTRY_SET & screenIndex = _index[entry->getScreenIndex()];
+		SCENEENTRY_SET::const_iterator iter = screenIndex.find(entry);
+		if(iter != screenIndex.end())
+		{
+			ret = true;
+			screenIndex.erase(iter);
+			_index[newIndex].insert(entry);
+			entry->setScreenIndex(newIndex);
+		}
+		
+		return ret;
+	}
+	else if(newIndex != (DWORD)-1)
+	{
+		if(_all.insert(entry).second)
+		{
+			_index[newIndex].insert(entry);
+		}
+	}	entry->setinserted();
+
+	return entry->hasInScene();	
+}
+/**
+* @brief 刷新进入对象的索引 
+*
+* @param entry 进入对象
+* @param newPos 对象坐标
+* @return true 成功 false 失败
+*/
+template <int MAX_X,int MAX_Y>
+bool aNineScreenIndex<MAX_X,MAX_Y>::refresh(aSceneEntry * entry,const aPos & newPos)
+{
+	aPos posi = entry->getPosI();
+
+	entry->setPos(aPos(MAX_X,MAX_Y),newPos);
+
+	aPos newposi = entry->getPosI();
+
+	if(newposi != posi)
+	{
+		return refresh(entry,newposi);
+	}
+	return false;
+}
+/**
+* @brief 移除一个进入对象 
+*
+* @param e 进入对象指针
+* @return
+*/
+template <int MAX_X,int MAX_Y>
+void  aNineScreenIndex<MAX_X,MAX_Y>::removeEntry(aSceneEntry * entry)
+{
+	aRWLockAutoScopeRW wrlockScope(_rwlock);
+	if(entry != NULL || !entry->hasInScene())return;
+
+	SCENEENTRY_SET::iterator iter = _all.find(entry);
+	if(iter != _all.end())
+	{
+		SCENEENTRY_SET & screenIndex = _index[entry->getScreenIndex()];
+		entry->setScreenIndex((DWORD)-2);
+		_all.erase(iter);
+		screenIndex.erase(entry);
+		entry->setinserted(false);	
+	}	
+}
+/**
+* @brief 获取九屏内进入对象列表 
+*
+* @param screen 屏编号
+* @return 九屏对象列表
+*/
+template <int MAX_X,int MAX_Y>
+const SCENEENTRY_SET & aNineScreenIndex<MAX_X,MAX_Y>:: getNineEntry(DWORD screen)
+{
+	return _index[screen];	
+} 

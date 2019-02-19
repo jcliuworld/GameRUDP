@@ -1,0 +1,3 @@
+#include "aComponent.h"
+
+DWORD  aComponentBase::_componentCount = 0;

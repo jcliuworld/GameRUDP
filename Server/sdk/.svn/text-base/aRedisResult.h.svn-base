@@ -1,0 +1,48 @@
+#ifndef _aRedisResult_H__
+#define _aRedisResult_H__
+/**
+* @file aRedisResult.h
+* @brief redis返回结果处理
+* @author ljc jc.liuworld@hotmail.com
+* @version 
+* @date 2015-07-07
+*/
+
+#include <hiredis/hiredis.h>
+#include "aDef.h"
+#include "aRedisCommand.h"
+
+class aRedisResult
+{
+	public:
+
+
+		static bool Ok (redisReply* reply);
+
+		static AStr Status(redisReply* reply);
+
+		static int Int(redisReply* reply);
+
+		static long Long(redisReply* reply);
+
+		static long long  LongLong(redisReply* reply);
+
+		static float Float(redisReply* reply);
+
+		static int String(redisReply* reply, AStr& str);
+
+		static int Vec(redisReply* reply, AVec<AStr>& arr);
+
+		static int Set(redisReply* reply, ASet<AStr>& s);
+
+		static int Map(redisReply* reply, const AVec<AStr>& keys,AMap<AStr,AStr>& m);
+
+		static int HMap(redisReply* reply, REDIS_HASH_MAP & h);
+
+		static int HMap(redisReply* reply, const AVec<AStr>& fields, REDIS_HASH_MAP & h);
+
+	private:
+		static void resultException(redisReply* reply,const char * function);
+};
+
+#endif

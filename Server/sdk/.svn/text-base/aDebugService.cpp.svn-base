@@ -1,0 +1,29 @@
+/** 
+* @file aDebugService.cpp
+* @brief 调试服务器
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-07-14
+*/
+#include "aDebugService.h"
+
+bool aDebugService::init(WORD port)
+{
+	_taskPool = new aTCPTaskPool(500,0);
+
+	if(NULL == _taskPool || !_taskPool->init())
+		return false;
+
+	if(! aNetService::init(port))
+		return false;
+
+	return true;
+}
+
+void aDebugService::newTCPTask(const int sock,const struct sockaddr_in * addr)
+{
+	
+}
+void aDebugService::run()
+{
+	main();
+}

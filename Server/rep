@@ -1,0 +1,9 @@
+#/bin/bash
+repStr='s/'$1'/'$2'/g'
+echo $repStr
+for i in *.{h,cpp}
+do
+echo $i 
+sed $repStr "$i" > filetmp
+mv filetmp "$i"
+done

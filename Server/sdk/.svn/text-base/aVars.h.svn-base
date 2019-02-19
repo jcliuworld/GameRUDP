@@ -1,0 +1,57 @@
+#ifndef _aVars_H__
+#define _aVars_H__
+/**
+ * @file aVars.h
+ * @brief 变量结构封装
+ * @author ljc jc.liyuworld@hotmail.com
+ * @version 
+ * @date 2011-10-10
+ */
+
+template <typename VARTYPE>
+class Vars
+{
+	public:
+		Vars(){};
+		~Vars(){};
+		enum PROPERTYVARS
+		{
+			VARS_SAVEBIN	= 1,  //需要二进制存储
+			VARS_SENDME	= 2,  //只发自己
+			VARS_SENDNINE	= 4,  //发送到九屏
+			VARS_SENDFRIEND	= 8,  //发送到好友
+			VARS_SENDSEPT	= 16, //发送到家族
+			VARS_SENDUNION	= 32, //发送到帮会
+			VSRS_SENDTMP	= 64, //发送到临时对话组
+			VARS_REFRESH	= 128, //定时器刷新标志
+		};
+		template <typename VARTYPE>
+			inline void operator<<(VARTYPE var)
+			{
+				_var = var;
+			}
+		template <typename VARTYPE>
+			inline void operator>>(VARTYPE &var)
+			{
+				var = _var;
+			}
+		template <typename VARTYPE>
+			inline void operator+(VARTYPE var)
+			{
+				_var = _var+var;
+			}
+		template <typename VARTYPE>
+			inline void operator-(VARTYPE var)
+			{
+				_var = _var-var;
+			}
+	private:
+		
+		/**
+		 * @brief 变量属性
+		 */
+		DWORD _property;
+		VARTYPE _var;
+
+};
+#endif

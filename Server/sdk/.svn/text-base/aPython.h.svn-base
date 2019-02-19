@@ -1,0 +1,155 @@
+#ifndef _aPython_H__
+#define _aPython_H__
+/**
+ * @file aPython.h
+ * @brief python 基础引擎 
+ * @author ljc jc.liuworld@hotmail.com
+ * @version 
+ * @date 2015-10-09
+ */
+
+
+#include <python2.6/Python.h>
+#include "aFunc.h"
+#include "aDef.h"
+#include "Age.h"
+using namespace std;
+
+
+///wrap的实现 应该在逻辑层处理 
+#define PY_WRAP_BEGIN() \
+	static PyMethodDef wrap_methods[] ={ 
+
+#define PY_WRAP_REG(func) \
+	 {#func, func, METH_VARARGS}, \
+
+#define PY_WRAP_END() \
+	{NULL, NULL} \
+}; \
+PyMODINIT_FUNC initWrap (void) \
+{\
+  PyObject * m =   Py_InitModule("wrap", wrap_methods); \
+  if(m == NULL) \
+        Age::logger->debug("wrap error"); \
+}
+
+
+////////wrap 模板///////////////////
+// int add(int arg1,int arg2)
+//{
+//       return arg1 + arg2;
+//}
+//
+// static PyObject* wrap_add(PyObject *self, PyObject *args)
+//{
+//    //把输入的Python对象转换为C/C++能识别的数据
+//
+//    int arg1, arg2;
+//    if(!PyArg_ParseTuple(args, "ii", &arg1, &arg2))
+//    return NULL;
+//    //调用C/C++函数，得到结果
+//
+//    int result = add(arg1,arg2);
+//    //把得到的结果包装成Python对象，并返回
+//
+//    return (PyObject*)Py_BuildValue("i", result);
+//}
+//
+// 这里是注册的形成原理
+//static PyMethodDef wrap_methods[] ={
+//    {"add", wrap_add, METH_VARARGS},
+//    {"st",newWrapStruct,METH_VARARGS},
+//    {NULL, NULL}
+//};
+//
+//
+//
+//PyMODINIT_FUNC initwrap (void)
+//{
+//  PyObject * m =   Py_InitModule("wrap", wrap_methods);
+//
+//  if(m == NULL)
+//        Age::logger->debug("wrap error");
+//
+//}
+
+class aPyThreadStateLock
+{
+	public:
+		aPyThreadStateLock()
+		{
+#ifdef PY_THREAD
+			_state = PyGILState_Ensure( );
+#endif
+		}
+		~aPyThreadStateLock()
+		{
+#ifdef PY_THREAD
+			PyGILState_Release( _state );
+#endif
+		}
+
+	private:
+		PyGILState_STATE _state;
+};
+
+class aPython
+{
+	public:
+
+		template < typename T>
+			T call(const char * module,const char * fun,const char * format,...);
+
+		~aPython()
+		{
+			Py_Finalize();
+		}
+
+
+		aPython(const char * path)
+		{
+			Py_Initialize();
+			// 初始化线程支持
+#ifdef PY_THREAD
+			PyEval_InitThreads();
+			PyEval_ReleaseThread(PyThreadState_Get()); 
+#endif
+
+			PyRun_SimpleString("import sys");
+			string importpath = "sys.path.append('";
+			importpath += path;
+			importpath += "')";
+			PyRun_SimpleString(importpath.c_str());
+			initWrap();
+
+		}
+
+		virtual void initWrap(){};
+
+
+	protected:
+		PyObject * run(PyObject * pModule, const char * fun,PyObject * args)
+		{
+
+			if(pModule == NULL)
+
+				return NULL;
+			PyObject * pyFun = PyObject_GetAttrString ( pModule,fun);
+
+			PyObject * ret = NULL;
+
+			if(pyFun == NULL)
+			{
+				Age::logger->error("[PYTHON] 找不到对应的属性 %s" ,fun);
+				return NULL;
+			}
+
+
+			ret = PyEval_CallObject(pyFun, args);      //调用函数  
+			return ret;
+		}
+
+
+};
+
+#endif

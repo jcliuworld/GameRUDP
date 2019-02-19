@@ -1,0 +1,256 @@
+#include "aPython.h"
+
+using namespace std;
+#define MAKE_PARAM() \
+        PyObject* pParm   = NULL;\
+        va_list vargs;\
+        va_start( vargs, format );\
+        pParm = Py_VaBuildValue( format, vargs );\
+        va_end(vargs);
+
+template <>
+void aPython::call(const char * module,const char * fun,const char * format,...)
+{
+	aPyThreadStateLock lock;
+        PyObject * pModule = PyImport_ImportModule(module);
+
+        if(pModule == NULL)
+        {
+                Age::logger->error("[PYTHON] 未知模块 %s" ,module);
+                return ;
+        }
+
+        MAKE_PARAM();
+        run( pModule,fun,pParm);
+
+
+}
+template <>
+bool aPython::call(const char * module,const char * fun,const char * format,...)
+{
+
+	aPyThreadStateLock lock;
+	PyObject * pModule = PyImport_ImportModule(module);
+
+        if(pModule == NULL)
+        {
+                Age::logger->error("[PYTHON] 未知模块 %s" ,module);
+                return false;
+        }
+        MAKE_PARAM();
+        PyObject * pRet = run(pModule, fun,pParm);
+        if( pRet == NULL )
+                return false;
+
+        int ret = 0;
+        PyArg_Parse( pRet, "i", &ret );
+
+
+        return ret;
+}
+template <>
+char aPython::call(const char * module,const char * fun,const char * format,...)
+{
+	aPyThreadStateLock lock;
+	PyObject * pModule = PyImport_ImportModule(module);
+
+        if(pModule == NULL)
+        {
+                Age::logger->error("[PYTHON] 未知模块 %s" ,module);
+                return 0;
+        }
+        MAKE_PARAM();
+        PyObject * pRet = run(pModule, fun,pParm);
+        if( pRet == NULL )
+                return 0;
+
+        char ret = 0;
+        PyArg_Parse( pRet, "c", &ret );
+
+
+        return ret;
+
+}
+
+template <>
+short aPython::call(const char * module,const char * fun,const char * format,...)
+{
+	aPyThreadStateLock lock;
+	PyObject * pModule = PyImport_ImportModule(module);
+
+        if(pModule == NULL)
+        {
+                Age::logger->error("[PYTHON] 未知模块 %s" ,module);
+                return 0;
+        }
+        MAKE_PARAM();
+        PyObject * pRet = run( pModule,fun,pParm);
+        if( pRet == NULL )
+                return 0;
+
+        short ret = 0;
+        PyArg_Parse( pRet, "h", &ret );
+
+
+        return ret;
+
+}
+template <>
+long aPython::call(const char * module,const char * fun,const char * format,...)
+{
+	aPyThreadStateLock lock;
+	PyObject * pModule = PyImport_ImportModule(module);
+
+        if(pModule == NULL)
+        {
+                Age::logger->error("[PYTHON] 未知模块 %s" ,module);
+                return 0;
+        }
+        MAKE_PARAM();
+        PyObject * pRet = run(pModule, fun,pParm);
+        if( pRet == NULL )
+                return 0;
+
+        long ret = 0;
+        PyArg_Parse( pRet, "l", &ret );
+
+
+        return ret;
+
+}
+template <>
+float aPython::call(const char * module,const char * fun,const char * format,...)
+{
+	aPyThreadStateLock lock;
+        PyObject * pModule = PyImport_ImportModule(module);
+
+        if(pModule == NULL)
+        {
+                Age::logger->error("[PYTHON] 未知模块 %s" ,module);
+                return 0;
+        }
+        MAKE_PARAM();
+        PyObject * pRet = run(pModule, fun,pParm);
+        if( pRet == NULL )
+                return 0;
+
+        float ret = 0;
+        PyArg_Parse( pRet, "f", &ret );
+
+
+        return ret;
+
+}
+template <>
+double aPython::call(const char * module,const char * fun,const char * format,...)
+{
+	aPyThreadStateLock lock;
+        PyObject * pModule = PyImport_ImportModule(module);
+
+        if(pModule == NULL)
+        {
+                Age::logger->error("[PYTHON] 未知模块 %s" ,module);
+                return 0;
+        }
+        MAKE_PARAM();
+        PyObject * pRet = run(pModule, fun,pParm);
+        if( pRet == NULL )
+                return 0;
+
+        double ret = 0;
+        PyArg_Parse( pRet, "d", &ret );
+
+
+        return ret;
+
+}
+
+template <>
+string aPython::call(const char * module,const char * fun,const char * format,...)
+{
+	aPyThreadStateLock lock;
+        PyObject * pModule = PyImport_ImportModule(module);
+
+        if(pModule == NULL)
+        {
+                Age::logger->error("[PYTHON] 未知模块 %s" ,module);
+                return "";
+        }
+        MAKE_PARAM();
+        PyObject * pRet = run( pModule,fun,pParm);
+        if( pRet == NULL )
+                return "";
+
+        char * ret = NULL;
+        PyArg_Parse( pRet, "s", &ret );
+
+
+        return string(ret);
+
+}template <>
+vector<string> aPython::call(const char * module,const char * fun,const char * format,...)
+{
+
+	aPyThreadStateLock lock;
+        PyObject * pModule = PyImport_ImportModule(module);
+
+        vector<string> ret;
+        if(pModule == NULL)
+        {
+                Age::logger->error("[PYTHON] 未知模块 %s" ,module);
+                return ret;
+        }
+        MAKE_PARAM();
+        PyObject * pRet = run( pModule, fun,pParm);
+
+        if( pRet == NULL )
+                return ret;
+
+        Py_ssize_t size  = PyList_Size(pRet);
+
+        PyObject * item = NULL;
+
+        for( Py_ssize_t  i = 0 ; i < size; ++i)
+        {
+                item = PyList_GetItem(pRet , i);
+                char * value  = NULL;
+                PyArg_Parse( item, "s", &value );
+
+                ret.push_back(value);
+        }
+        return ret;
+
+}
+template <>
+map<string , string > aPython::call(const char * module,const char * fun,const char * format,...)
+{
+
+	aPyThreadStateLock lock;
+        PyObject * pModule = PyImport_ImportModule(module);
+        map<string,string> ret;
+
+        if(pModule == NULL)
+        {
+                Age::logger->error("[PYTHON] 未知模块 %s" ,module);
+                return ret;
+        }
+                MAKE_PARAM();
+        PyObject * pRet = run( pModule, fun,pParm);
+        if( pRet == NULL )
+                return ret;
+
+        Py_ssize_t i = 0;
+
+        PyObject * key = NULL;
+        PyObject * value = NULL;
+
+        while(PyDict_Next(pRet,&i,&key,&value))
+        {
+                char * skey = PyString_AS_STRING(key);
+                char * svalue = PyString_AS_STRING(value);
+                ret.insert(make_pair(skey,svalue));
+        }
+        return ret;
+
+}
+

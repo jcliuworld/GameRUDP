@@ -1,0 +1,3 @@
+cast.lo: cast.cpp cast.h
+
+cast.h:

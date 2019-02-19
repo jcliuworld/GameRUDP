@@ -1,0 +1,125 @@
+#ifndef _aTableDef_H__
+#define _aTableDef_H__
+
+/** 
+* @file aTableDef.h
+* @brief 数据库表格结构管理器
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-17
+*/
+
+#include "aNoneCopyable.h"
+#include "aMutex.h"
+#include <string>
+#include <map>
+/** 
+ * @brief 数据库 数据类型
+ */
+
+typedef enum {
+	DB_BYTE,
+	DB_CHAR,
+	DB_WORD,
+	DB_DWORD,
+	DB_QWORD,
+	DB_LONG,
+	DB_LONGLONG,
+	DB_FLOAT,
+	DB_SHORT,
+	DB_STR,
+	DB_BIN,
+	DB_ZIP,
+	DB_BIN2,
+	DB_ZIP2,
+	DB_NONE
+} DBTYPE ;
+
+#define MAX_COLNAME 32
+#pragma pack(1)
+/** 
+ * @brief 数据库列描述
+ */
+
+struct dbCol
+{
+	char  name[MAX_COLNAME+1];/**<col name*/
+	int type;/**<date type*/
+	unsigned int size;/**<data size*/
+
+};
+#pragma pack()
+/** 
+ * @brief 数据库表格结构封装 禁用拷贝构造函数
+ */
+
+class aTableDef:private aNoneCopyable
+{
+	public:
+		/** 
+		 * @brief 析构函数
+		 */
+
+		virtual ~aTableDef(){}
+		/** 
+		 * @brief 构造函数
+		 */
+
+		aTableDef(){}
+		/** 
+		 * @brief 初始化 
+		 *
+		 * @filename 文件名
+		 * @return 
+		 */
+
+		bool init(const char * filename);
+		/** 
+		 * @brief 注册表结构
+		 * 
+		 * @param tableName 表名
+		 * @param db 列描述
+		 * @param size 列个数
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		bool regTable(const char * tableName,dbCol *db,int size);
+		/** 
+		 * @brief 根据表名和列名获取数据类型
+		 * 
+		 * @param tableName 表名
+		 * @param colName 列名
+		 * 
+		 * @return 数据类型
+		 */
+
+		int getColType(const char * tableName,const char * colName);
+
+		/**
+		 * @brief 获取创建表格命令
+		 *
+		 * @param tableName
+		 * @param cmd
+		 */
+		void getCreateCmd(const char * tableName,std::string & cmd);
+	private:
+		typedef std::multimap<std::string,dbCol>  TABLEINFO;
+		typedef std::multimap<std::string,dbCol>::iterator TABLEINFO_IT;
+
+		/** 
+		 * @brief 描述结构存储
+		 */
+
+		TABLEINFO _tableInfo;
+
+		std::map<std::string , std::string> _key;//主键信息
+		std::multimap<std::string , std::string> _index;//索引信息
+		/** 
+		 * @brief 互斥体
+		 */
+
+		aMutex mutex;
+};
+
+#endif
+

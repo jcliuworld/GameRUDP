@@ -1,0 +1,5 @@
+idea.lo: idea.cpp /usr/include/stdc-predef.h idea.h
+
+/usr/include/stdc-predef.h:
+
+idea.h:

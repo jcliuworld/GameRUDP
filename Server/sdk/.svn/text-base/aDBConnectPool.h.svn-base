@@ -1,0 +1,677 @@
+#ifndef _aDBConnectPool_H__
+#define _aDBConnectPool_H__
+
+#pragma once
+/** 
+ * @file aDBConnectPool.h
+ * @brief 数据库操作封装
+ * @author ljc jc.liuworld@hotmail.com
+ * @date 2010-05-12
+ */
+
+#include "aNoneCopyable.h"
+#include "aTable.h"
+#include "aTableDef.h"
+#include "aTime.h"
+#include "aDef.h"
+#include "aMutex.h"
+
+
+#include <mysql.h>
+#include <map>
+
+const unsigned int MAX_HOSTSIZE = 32;
+const unsigned int MAX_USERSIZE = 32;
+const unsigned int MAX_DBSIZE = 32;
+/** 
+ * @brief 数据库变量封装
+ */
+
+class DBVARTYPE;
+/** 
+ * @brief 数据库记录封装
+ */
+
+class aRecord;
+/** 
+ * @brief 数据库记录多行
+ */
+
+class aRecordSet;
+/** 
+ * @brief 表格结构定义
+ */
+
+class aTableDef;
+
+/** 
+ * @brief mysql 数据库封装 禁用拷贝构造函数
+ */
+
+class aMysqlDB :private aNoneCopyable
+{
+
+	public:
+		/** 
+		 * @brief 构造函数
+		 * 
+		 * @param host 主机地址
+		 * @param userName 用户名
+		 * @param passwd 密码
+		 * @param port 端口
+		 * @param dbName 数据库名字
+		 * @param tableDef 表格定义
+		 * @param autoCommit 是否自动提交
+		 * @param :_id(++_autoIncrease mysql 对象ID 
+		 */
+
+		aMysqlDB(const char * host,char * userName, char *passwd,unsigned int port,char * dbName,aTableDef *tableDef,bool autoCommit = false);
+		/** 
+		 * @brief 数据库初始化
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		bool init();
+		/** 
+		 * @brief 设置自动提交标记
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		bool setAutoCommit();
+		/** 
+		 * @brief 数据库循环检查
+		 */
+
+		void checkAuction();
+		/** 
+		 * @brief 终止
+		 */
+
+		void final();
+		/** 
+		 * @brief 执行SQL语句
+		 * 
+		 * @param cmd SQL语句字符串 
+		 * @param len SQL语句长度
+		 * 
+		 * @return mysql 返回码
+		 */
+
+		int exeSql(const char * cmd,unsigned int len);
+		/** 
+		 * @brief 插入一条记录
+		 * 
+		 * @param tableName 表名
+		 * @param rec 记录
+		 * 
+		 * @return mysql 返回码
+		 */
+
+		unsigned int exeInsert(const char * tableName, aRecord *rec);
+		/** 
+		 * @brief 插入多条记录
+		 * 
+		 * @param tableName 表名
+		 * @param ret 多条记录
+		 * 
+		 * @return mysql 返回码
+		 */
+
+		unsigned int exeInsert(const char * tableName,aRecordSet *ret);
+		/** 
+		 * @brief 删除记录
+		 * 
+		 * @param tableName 表名 
+		 * @param where 条件
+		 * 
+		 * @return mysql 返回码
+		 */
+
+		unsigned int exeDelete(const char * tableName, aRecord * where);
+		/** 
+		 * @brief 删除记录
+		 * 
+		 * @param tableName 表名 
+		 * @param where 条件
+		 * 
+		 * @return mysql 返回码
+		 */
+
+		unsigned int exeDelete(const char * tableName, const char * where);
+		/** 
+		 * @brief 更新一条记录
+		 * 
+		 * @param tableName 表名
+		 * @param rec 更新的记录
+		 * @param where 条件
+		 * 
+		 * @return mysql 返回码
+		 */
+
+		unsigned int exeUpdate(const char * tableName,aRecord * rec,aRecord * where);
+		/** 
+		 * @brief 更新一条记录
+		 * 
+		 * @param tableName 表名
+		 * @param rec 更新的记录
+		 * @param where 条件
+		 * 
+		 * @return mysql 返回码
+		 */
+
+
+		unsigned int exeUpdate(const char * tableName,aRecord * rec,const char * where);
+		/** 
+		 * @brief 更新多条记录
+		 * 
+		 * @param tableName 表名
+		 * @param rec 更新的记录
+		 * @param where 条件
+		 * 
+		 * @return mysql 返回码
+		 */
+
+
+		unsigned int exeUpdate(const char * tableName,aRecordSet *  ret,aRecord * where);
+		/** 
+		 * @brief 更新多条记录
+		 * 
+		 * @param tableName 表名
+		 * @param rec 更新的记录
+		 * @param where 条件
+		 * 
+		 * @return mysql 返回码
+		 */
+
+		unsigned int exeUpdate(const char * tableName,aRecordSet *  ret,const char * where);
+		/** 
+		 * @brief 获取数据库记录
+		 * 
+		 * @param tableName 表名
+		 * @param ret 存储对象
+		 * @param where 条件
+		 * 
+		 * @return mysql 返回码
+		 */
+
+		unsigned int exeSelect(const char * tableName,aRecordSet & ret,aRecord * where = NULL);
+		/** 
+		 * @brief 获取数据库记录
+		 * 
+		 * @param tableName 表名
+		 * @param ret 存储对象
+		 * @param where 条件
+		 * 
+		 * @return mysql 返回码
+		 */
+		unsigned int exeSelect(const char * tableName,aRecordSet & ret,const char * where = NULL);
+
+		/**
+		 * @brief 执行表格创建命令
+		 *
+		 * @param tableName
+		 *
+		 * @return 
+		 */
+		unsigned int exeCreate(const char * tableName);
+		/** 
+		 * @brief 字符串转意 序列化存储前必须使用
+		 * 
+		 * @param src 源字符串 
+		 * @param dest 目的字符串
+		 * @param len 长度
+		 * 
+		 * @return 目的字符串
+		 */
+
+		char * escapeString(const char * src,char * dest,unsigned int len);
+		/** 
+		 * @brief 字符串转意 序列化存储前必须使用
+		 * 
+		 * @param src 源字符串    
+		 * @param dest 目的字符串
+		 * 
+		 * @return 目的字符串 
+		 */
+
+		std::string & escapeString(std::string &src,std::string &dest);
+		/** 
+		 * @brief 字符串转意判断
+		 * 
+		 * @param src 需要判断的字符串
+		 * 
+		 * @return true 需要 false 不需要
+		 */
+
+		bool escapeString(std::string &src);
+		/** 
+		 * @brief 字符串转意判断
+		 * 
+		 * @param src 需要判断的字符串
+		 * 
+		 * @return true 需要 false 不需要
+		 */
+
+		bool escapeString(const char *src);
+
+		/** 
+		 * @brief 获取数据库ID
+		 * 
+		 * @return 数据库ID
+		 */
+
+	
+		DWORD getID()
+		{
+			return _id;
+		}
+	private:
+		/** 
+		 * @brief 主机地址
+		 */
+
+		char _host[MAX_HOSTSIZE];
+		/** 
+		 * @brief 用户名
+		 */
+
+		char _userName[MAX_USERSIZE];
+		/** 
+		 * @brief 密码
+		 */
+
+		char _passwd[MAX_PASSWDSIZE];
+		/** 
+		 * @brief 数据库名字
+		 */
+
+		char _dbName[MAX_DBSIZE];
+		/** 
+		 * @brief 端口
+		 */
+
+		unsigned int _port;
+		/** 
+		 * @brief mysql 实例指针
+		 */
+
+		MYSQL * _mysql;
+		/** 
+		 * @brief 是否自动提交标记
+		 */
+
+		bool _autoCommit;
+		/** 
+		 * @brief 数据库活动时间
+		 */
+
+		atmTime _leftTime;
+		/** 
+		 * @brief 本次数据库活动时间
+		 */
+
+		atmTime _usingTime;
+		/** 
+		 * @brief 使用次数
+		 */
+
+		DWORD _usedTimes;
+		/** 
+		 * @brief 自增变量 用于标记全局计数
+		 */
+
+		static DWORD _autoIncrease;
+		/** 
+		 * @brief 数据库ID
+		 */
+
+		DWORD _id;
+		/** 
+		 * @brief 表格定义
+		 */
+
+		aTableDef * _tableDef;
+};
+
+/** 
+ * @brief 数据库状态
+ */
+
+enum DBSTATE
+{
+	MYSQL_HANDLE_INVALED =1 , /**<can not be used*/
+	MYSQL_HANLDE_VALID = 2,/**<can be userd*/
+	MYSQL_HANDLE_USRD = 3/**<using*/
+};
+/** 
+ * @brief 数据库结构封装
+ */
+#pragma pack(1)
+struct stMysql 
+{
+	aMysqlDB * mysql; /**<mysql对象封装*/
+	DBSTATE state; /**<数据库状态*/
+};
+#pragma pack()
+/** 
+ * @brief 数据库句柄定义
+ */
+
+typedef unsigned int DBHANDLE;
+/** 
+ * @brief 数据库连接池 禁用拷贝构造函数
+ */
+
+class aDBConnectPool:private aNoneCopyable
+{
+	public:
+		/** 
+		 * @brief 析构函数
+		 */
+
+
+		~aDBConnectPool();
+		/** 
+		 * @brief 构造函数
+		 */
+
+		aDBConnectPool();
+
+		/** 
+		 * @brief 初始化是数据库连接池
+		 * 
+		 * @param urlstring 数据库url字符串
+		 * @param tabdef 全局表格定义
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		bool init(const char * urlstring,aTableDef * tabdef);
+		/** 
+		 * @brief 加载url配置
+		 * 
+		 * @param urlStr 字符串配置文件
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		bool loadConfig(const char * urlStr);
+		/** 
+		 * @brief 插入一条记录
+		 * 
+		 * @param handleID 数据库句柄
+		 * @param tableName 表名
+		 * @param rec 记录
+		 * 
+		 * @return 数据库返回码
+		 */
+
+		unsigned int exeInsert(DBHANDLE handleID,const char * tableName, aRecord *rec);
+		/** 
+		 * @brief 插入多条记录
+		 * 
+		 * @param handleID 数据库句柄
+		 * @param tableName 表名
+		 * @param rec 记录
+		 * 
+		 * @return 数据库返回码
+		 */
+
+		unsigned int exeInsert(DBHANDLE handleID,const char * tableName,aRecordSet *ret);
+		/** 
+		 * @brief 删除一条记录
+		 * 
+		 * @param handleID 数据库句柄
+		 * @param tableName 表名
+		 * @param where 条件
+		 * 
+		 * @return 数据库返回码
+		 */
+
+		unsigned int exeDelete(DBHANDLE handleID,const char * tableName, aRecord * where);
+		/** 
+		 * @brief 删除一条记录
+		 * 
+		 * @param handleID 数据库句柄
+		 * @param tableName 表名
+		 * @param where 条件
+		 * 
+		 * @return 数据库返回码
+		 */
+
+		unsigned int exeDelete(DBHANDLE handleID,const char * tableName, const char * where);
+		/** 
+		 * @brief 更新一条记录
+		 * 
+		 * @param handleID 数据库句柄
+		 * @param tableName 表名
+		 * @param rec 记录
+		 * @param where 条件
+		 * 
+		 * @return 数据库返回码 
+		 */
+
+		unsigned int exeUpdate(DBHANDLE handleID,const char * tableName,aRecord * rec,aRecord * where);
+		/** 
+		 * @brief 更新一条记录
+		 * 
+		 * @param handleID 数据库句柄
+		 * @param tableName 表名
+		 * @param rec 记录
+		 * @param where 条件
+		 * 
+		 * @return 数据库返回码
+		 */
+
+		unsigned int exeUpdate(DBHANDLE handleID,const char * tableName,aRecord * rec,const char * where);
+		/** 
+		 * @brief 更新多条记录
+		 * 
+		 * @param handleID 数据库句柄
+		 * @param tableName 表名
+		 * @param ret 记录
+		 * @param where 条件
+		 * 
+		 * @return 数据库返回码
+		 */
+
+		unsigned int exeUpdate(DBHANDLE handleID,const char * tableName,aRecordSet *  ret,aRecord * where);
+		/** 
+		 * @brief 更新多条记录
+		 * 
+		 * @param handleID 数据库句柄
+		 * @param tableName 表名
+		 * @param ret 记录
+		 * @param where 条件
+		 * 
+		 * @return 数据库返回码
+		 */
+
+		unsigned int exeUpdate(DBHANDLE handleID,const char * tableName,aRecordSet *  ret,const char * where);
+
+		/** 
+		 * @brief 选取记录
+		 * 
+		 * @param handleID 数据库句柄 
+		 * @param tableName 表名
+		 * @param ret 记录
+		 * @param where 条件
+		 * 
+		 * @return 数据库返回码 
+		 */
+		unsigned int exeSelect(DBHANDLE handleID,const char * tableName,aRecordSet & ret,aRecord * where = NULL);
+		/** 
+		 * @brief 选取记录
+		 * 
+		 * @param handleID 数据库句柄 
+		 * @param tableName 表名
+		 * @param ret 记录
+		 * @param where 条件
+		 * 
+		 * @return 数据库返回码
+		 */
+
+		unsigned int exeSelect(DBHANDLE handleID,const char * tableName,aRecordSet & ret,const char * where = NULL);
+
+		/**
+		 * @brief 创建表格
+		 *
+		 * @param handleID
+		 * @param tableName
+		 *
+		 * @return 
+		 */
+		unsigned int exeCreate(DBHANDLE handleID,const char * tableName);
+		/** 
+		 * @brief 字符串转意 序列化存储前必须使用
+		 * 
+		 * @param handleID 数据库句柄 
+		 * @param src 源字符串 
+		 * @param dest 目的字符串
+		 * @param len 长度
+		 * 
+		 * @return 目的字符串
+		 */
+
+		char * escapeString(DBHANDLE handleID,const char * src,char * dest,unsigned int len);
+		/** 
+		 * @brief 字符串转意 序列化存储前必须使用
+		 *
+		 * @param handleID 数据库句柄  
+		 * @param src 源字符串    
+		 * @param dest 目的字符串
+		 * 
+		 * @return 目的字符串 
+		 */
+
+		std::string & escapeString(DBHANDLE handleID,std::string &src,std::string &dest);
+		/** 
+		 * @brief 字符串转意判断
+		 * 
+		 * @param handleID 数据库句柄 
+		 * @param src 需要判断的字符串
+		 * 
+		 * @return true 需要 false 不需要
+		 */
+
+		bool escapeString(DBHANDLE handleID,std::string &src);
+		/** 
+		 * @brief 字符串转意判断
+		 * 
+		 * @param handleID 数据库句柄 
+		 * @param src 需要判断的字符串
+		 * 
+		 * @return true 需要 false 不需要
+		 */
+
+		bool escapeString(DBHANDLE handleID,const char *src);
+
+		/** 
+		 * @brief 获取表格定义
+		 * 
+		 * @return 返回表格定义
+		 */
+
+		aTableDef * getTableDef();
+		/** 
+		 * @brief 获取数据库连接池大小
+		 * 
+		 * @return 数据库连接池大小
+		 */
+
+
+		unsigned int size();
+		/** 
+		 * @brief 结束数据库连接池
+		 */
+
+		void final();
+		/** 
+		 * @brief 获取数据库句柄
+		 * 
+		 * @return 数据库句柄
+		 */
+
+		DBHANDLE  getHandle();
+		/** 
+		 * @brief 释放数据库句柄
+		 * 
+		 * @param handle 被释放的句柄
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		bool putHandle(DBHANDLE handle);
+
+	private:
+		/** 
+		 * @brief 获取mysql数据对象
+		 * 
+		 * @param handle 数据库句柄
+		 * 
+		 * @return mysql 数据库对象指针
+		 */
+
+		aMysqlDB * getMysqlByID(DBHANDLE handle);
+
+	private:
+		/** 
+		 * @brief 主机地址
+		 */
+
+		char _host[MAX_HOSTSIZE];
+		/** 
+		 * @brief 用户名
+		 */
+
+		char _userName[MAX_USERSIZE];
+		/** 
+		 * @brief 密码
+		 */
+
+		char _passwd[MAX_PASSWDSIZE];
+		/** 
+		 * @brief 数据库名
+		 */
+
+		char _dbName[MAX_DBSIZE];
+		/** 
+		 * @brief 端口
+		 */
+
+		unsigned int _port;
+		/** 
+		 * @brief 表格结构注册
+		 */
+
+		aTableDef * _tableDef;
+		/** 
+		 * @brief 互斥体
+		 */
+
+		aMutex mutex;
+		/** 
+		 * @brief 数据库连接池大小
+		 */
+
+		unsigned int _poolsize;
+		/** 
+		 * @brief 数据库容器存储 key 数据库句柄 value 数据库结构封装
+		 */
+
+		typedef std::map<DWORD,stMysql> MYSQLMAP;
+		/** 
+		 * @brief 数据库存储器迭代器
+		 */
+
+		typedef std::map<DWORD,stMysql>::iterator MYSQLMAP_IT;
+		/** 
+		 * @brief 数据库容器
+		 */
+
+		MYSQLMAP _poolMap;
+
+};
+#endif

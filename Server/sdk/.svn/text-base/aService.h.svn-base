@@ -1,0 +1,151 @@
+#ifndef _aService_H__
+#define _aService_H__
+
+#pragma once
+
+/** 
+* @file aService.h
+* @brief  服务器回调结构封装
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-14
+*/
+#include "Age.h"
+#include "aNoneCopyable.h"
+#include <string>
+class aService : private aNoneCopyable
+{
+	public:
+
+		/** 
+		 * @brief the default extract.
+		 */
+
+		virtual ~aService(){ 
+			//_instance=NULL;
+		}
+
+		/** 
+		 * @brief whether the service is terminate.
+		 * 
+		 * @return value  if return true the serive is terminate.
+		 */
+
+		bool isTerminate()const;
+
+		/** 
+		 * @brief to make the service stop
+		 */
+
+		void Terminate();
+
+		/** 
+		 * @brief the service main loop
+		 */
+
+		void main();
+
+		/** 
+		 * @brief get the class instance.
+		 * 
+		 * @return aService * 
+		 */
+
+		static aService * getInstance()
+		{
+			return _instance;
+		}
+
+		/** 
+		 * @brief reload the config the file.
+		 */
+
+		virtual void reloadConfig(){};
+		/** 
+		 * @brief user define kill sig
+		 */
+
+		virtual void userKill1()
+		{
+			Age::logger->info("user kill sig SIGUSR1");
+		}
+		/** 
+		 * @brief user define kill sig
+		 */
+
+		virtual void userKill2()
+		{
+			Age::logger->info("user kill sig SIGUSR2");
+		}
+
+		/** 
+		* @brief return the servie name;
+		*/
+		const char * getServerName();
+
+	protected:
+
+		/**
+		 *
+		 * @brief the default constructor 
+		 *
+		 */
+		/** 
+		 * @brief  the default constructor 
+		 * 
+		 * @param name server name 
+		 */
+
+		aService(const std::string & name);
+
+		/** 
+		 * @brief the initialization function 
+		 * 
+		 * @return true or false 
+		 */
+
+		virtual bool init();
+
+		/** 
+		 * @brief whether the serice is start sucessful.
+		 * 
+		 * @return true or false 
+		 */
+
+		virtual bool validate()
+		{
+			return true;
+		}
+
+		/** 
+		 * @brief the callback function of service.
+		 * 
+		 * @return true or false 
+		 */
+
+		virtual bool serviceCallback() = 0;
+
+		/** 
+		 * @brief  the final function of service.
+		 */
+
+		virtual void final() = 0;
+
+	private:
+		/** 
+		 * @brief the instace of the service
+		 */
+
+		static aService *_instance;
+		/** 
+		 * @brief the stat of the service
+		 */
+
+		bool _terminate; 
+		/** 
+		 * @brief  the service name 
+		 */
+		const char *  name;
+};
+
+#endif
+

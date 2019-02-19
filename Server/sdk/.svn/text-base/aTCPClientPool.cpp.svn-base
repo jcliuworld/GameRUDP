@@ -1,0 +1,786 @@
+#include "aTCPClientPool.h"
+/** 
+ * @file aTCPClientPool.cpp
+ * @brief  客户端任务连接池
+ * @author ljc jc.liuworld@hotmail.com
+ * @date 2010-05-18
+ */
+
+/** 
+ * @brief  连接检查线程
+ */
+
+class aCheckConnThread:public aThread
+{
+	private:
+		/** 
+		 * @brief 连接池
+		 */
+
+		aTCPClientPool * pool;
+	public:
+		/** 
+		 * @brief 构造函数
+		 * 
+		 * @param pool 连接池
+		 * @param name 名字
+		 */
+
+		aCheckConnThread(aTCPClientPool * pool,const std::string & name = std::string("aCheckConnThread"))
+			:aThread(name),pool(pool)
+			{
+
+			}
+		virtual void run()
+		{
+			while(!isFinal())
+			{
+				aThread::sleep(4);
+				atmTime rt;
+				pool->timeAction(rt);
+			}
+			
+		}
+};
+
+typedef std::list<aTCPClient *> aTCPClientConntainer;
+
+typedef aTCPClientConntainer::iterator aTCPClient_IT;
+
+typedef std::vector<struct epoll_event> epollfdContainer;
+/** 
+ * @brief tcp连接队列
+ */
+
+class aTCPClientTaskQueue
+{
+	public:
+		/** 
+		 * @brief 构造函数
+		 */
+
+		aTCPClientTaskQueue() :_size(0) {}
+		/** 
+		 * @brief 析构函数
+		 */
+
+		virtual ~aTCPClientTaskQueue() {}
+		/** 
+		 * @brief 加入一个task
+		 * 
+		 * @param task task指针
+		 */
+
+		inline void add(aTCPClient *task)
+		{
+			mlock.lock();
+			_queue.push(task);
+			_size++;
+			mlock.unlock();
+		}
+	protected:
+		/** 
+		 * @brief 检查队列
+		 */
+
+		inline void check_queue()
+		{
+			mlock.lock();
+			while(!_queue.empty())
+			{
+				_temp_queue.push(_queue.front());
+				_queue.pop();
+			}
+			_size = 0;
+			mlock.unlock();
+			while(!_temp_queue.empty())
+			{
+				aTCPClient *task = _temp_queue.front();
+				_temp_queue.pop();
+				_add(task);
+			}
+		}
+		virtual void _add(aTCPClient *task) = 0;
+		unsigned int _size;
+	private:
+		aMutex mlock;
+
+		std::queue<aTCPClient *, std::deque<aTCPClient * > > _queue;
+		std::queue<aTCPClient *, std::deque<aTCPClient * > > _temp_queue;
+
+};
+/** 
+ * @brief 检查等待线程
+ */
+
+class aCkeckWaitThread : public aThread, public aTCPClientTaskQueue
+{
+
+	private:
+		/** 
+		 * @brief 连接池
+		 */
+
+		aTCPClientPool *pool;
+
+		aTCPClientConntainer tasks;	/**< 任务列表 */
+		aTCPClientConntainer::size_type task_count;			/**< tasks计数(保证线程安全*/
+		int kdpfd;
+		epollfdContainer epfds;
+
+		/** 
+		 * @brief 添加一个连接任务
+		 * 
+		 * @param task 连接任务
+		 */
+
+		void _add(aTCPClient *task)
+		{
+			task->addEpoll(kdpfd, EPOLLIN | EPOLLERR | EPOLLPRI, (void *)task);
+			tasks.push_back(task);
+			task_count = tasks.size();
+			if (task_count > epfds.size())
+			{
+				epfds.resize(task_count + 16);
+			}
+		}
+		/** 
+		 * @brief 移除一个taks
+		 * 
+		 * @param task task 指针
+		 */
+
+		void remove(aTCPClient *task)
+		{
+			task->delEpoll(kdpfd, EPOLLIN | EPOLLERR | EPOLLPRI);
+			tasks.remove(task);
+			task_count = tasks.size();
+		}
+		/** 
+		 * @brief 移除一个容器
+		 * 
+		 * @param it task 迭代器
+		 */
+
+		void remove(aTCPClient_IT &it)
+		{
+			(*it)->delEpoll(kdpfd, EPOLLIN | EPOLLERR | EPOLLPRI);
+			tasks.erase(it);
+			task_count = tasks.size();
+		}
+
+	public:
+
+		/** 
+		 * @brief 构造函数
+		 * 
+		 * @param pool  所属的连接池
+		 * @param &name 线程名称
+		 */
+
+		aCkeckWaitThread(
+				aTCPClientPool *pool,
+				const std::string &name = std::string("aCkeckWaitThread"))
+			: aThread(name), pool(pool)
+			{
+				task_count = 0;
+				kdpfd = epoll_create(256);
+				assert(-1 != kdpfd);
+				epfds.resize(256);
+			}
+
+		/** 
+		 * @brief 析构函数
+		 */
+
+		~aCkeckWaitThread()
+		{
+			TEMP_FAILURE_RETRY(::close(kdpfd));
+		}
+
+		void run();
+
+};
+
+/** 
+ * @brief 等待接受验证指令，并进行验证
+ */
+
+void aCkeckWaitThread::run()
+{
+	aTCPClient_IT it, next;
+
+	while(!isFinal())
+	{
+		check_queue();
+		if (!tasks.empty())
+		{
+
+			int retcode = epoll_wait(kdpfd, &epfds[0], task_count, 0);
+			if (retcode > 0)
+			{
+				for(int i = 0; i < retcode; i++)
+				{
+					aTCPClient *task = (aTCPClient *)epfds[i].data.ptr;
+					if (epfds[i].events & (EPOLLERR | EPOLLPRI))
+					{
+						//套接口出现错误
+						Age::logger->error(SYS_SDK_ID_000026);
+						remove(task);
+						task->resetState();
+					}
+					else if (epfds[i].events & EPOLLIN)
+					{
+						switch(task->checkRebound())
+						{
+							case 1:
+								//验证成功
+								remove(task);
+								if (!pool->addMain(task))
+								{
+									task->resetState();
+								}
+								break;
+							case 0:
+								//超时，下面会处理
+								break;
+							case -1:
+								//验证失败，回收任务
+								remove(task);
+								task->resetState();
+								break;
+						}
+					}
+				}
+			}
+		}
+
+		aThread::msleep(50);
+	}
+
+	//把所有等待验证队列中的连接加入到回收队列中，回收这些连接
+	for(it = tasks.begin(), next = it, ++next; it != tasks.end(); it = next, ++next)
+	{
+		aTCPClient *task = *it;
+		remove(it);
+		task->resetState();
+	}
+}
+/** 
+ * @brief 客户端线程
+ */
+
+class aTCPClientThread : public aThread, public aTCPClientTaskQueue
+{
+
+	private:
+
+		aTCPClientPool *pool;
+		aTCPClientConntainer tasks;	/**< 任务列表 */
+		aTCPClientConntainer::size_type task_count;			/**< tasks计数(保证线程安全*/
+		int kdpfd;
+		epollfdContainer epfds;
+
+		void _add(aTCPClient *task)
+		{
+			task->addEpoll(kdpfd, EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLPRI, (void *)task);
+			tasks.push_back(task);
+			task_count = tasks.size();
+			if (task_count > epfds.size())
+			{
+				epfds.resize(task_count + 16);
+			}
+		}
+
+		void remove(aTCPClient_IT &it)
+		{
+			(*it)->delEpoll(kdpfd, EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLPRI);
+			tasks.erase(it);
+			task_count = tasks.size();
+		}
+
+	public:
+
+		static const aTCPClientConntainer::size_type connPerThread = 512;	/**< 每个线程带的连接数量 */
+
+		/** 
+		 * @brief 构造函数
+		 * 
+		 * @param pool 所属的连接池
+		 * @param &name 线程名称
+		 */
+
+		aTCPClientThread(
+				aTCPClientPool *pool,
+				const std::string &name = std::string("aTCPClientThread"))
+			: aThread(name), pool(pool)
+			{
+				task_count = 0;
+				kdpfd = epoll_create(connPerThread);
+				assert(-1 != kdpfd);
+				epfds.resize(connPerThread);
+			}
+
+		/** 
+		 * @brief  析构函数
+		 */
+
+		~aTCPClientThread()
+		{
+			TEMP_FAILURE_RETRY(::close(kdpfd));
+		}
+
+		void run();
+
+		/** 
+		 * @brief 返回连接任务的个数
+		 * 
+		 * @return 这个线程处理的连接任务数
+
+		 */
+		const aTCPClientConntainer::size_type size() const
+		{
+			return task_count + _size;
+		}
+
+};
+
+/** 
+ * @brief 等待接受验证指令，并进行验证
+ */
+
+void aTCPClientThread::run()
+{
+	aRealTime currentTime;
+	aTCPClient_IT it, next;
+	aRealTime _1_msec(currentTime), _50_msec(currentTime);
+
+	int kdpfd_r;
+	epollfdContainer epfds_r;
+	kdpfd_r = epoll_create(256);
+	assert(-1 != kdpfd_r);
+	epfds.resize(256);
+	DWORD fds_count_r = 0;
+	//long time = pool->usleep_time;
+	bool check=false;
+	while(!isFinal())
+	{
+		currentTime.now();
+
+		if (check)  //after check
+		{
+			check_queue();
+			if (!tasks.empty())
+			{
+				for(it = tasks.begin(), next = it, ++next; it != tasks.end(); it = next, ++next)
+				{
+					aTCPClient *task = *it;
+
+					if (task->isTerminate())
+					{
+						if (task->isFdsrAdd())
+						{
+							task->delEpoll(kdpfd_r, EPOLLIN | EPOLLERR | EPOLLPRI);
+							fds_count_r --;
+						}
+						remove(it);
+						task->getNextState();
+					}
+					else
+					{
+						if (task->checkFirstMainLoop())
+						{
+							task->listernRecv(false);
+						}
+						if(!task->isFdsrAdd())
+						{
+							task->addEpoll(kdpfd_r, EPOLLIN | EPOLLERR | EPOLLPRI, (void *)task);
+							task->fdstrAdd(true); 
+							fds_count_r++;
+							if (fds_count_r > epfds_r.size())
+							{
+								epfds_r.resize(fds_count_r + 16);
+							}
+						}
+					}
+				}
+			}
+			check=false;
+		}
+
+		aThread::msleep(2);
+		if(fds_count_r && _1_msec.elapse(currentTime) >= 2)
+		{
+
+			int retcode = epoll_wait(kdpfd_r, &epfds_r[0], fds_count_r, 0);
+			if (retcode > 0)
+			{
+				for(int i = 0; i < retcode; i++)
+				{
+					aTCPClient *task = (aTCPClient *)epfds_r[i].data.ptr;
+					if (epfds_r[i].events & (EPOLLERR | EPOLLPRI))
+					{
+						//套接口出现错误
+						Age::logger->debug(SYS_SDK_ID_000027, __PRETTY_FUNCTION__,__LINE__);
+						task->Terminate(aTCPClient::TM_sock_error);
+						check=true;
+					}
+					else
+					{
+						if (epfds_r[i].events & EPOLLIN)
+						{
+							//套接口准备好了读取操作
+							if (!task->listernRecv(true))
+							{
+								Age::logger->debug(SYS_SDK_ID_000028, __PRETTY_FUNCTION__,__LINE__);
+								task->Terminate(aTCPClient::TM_sock_error);
+								check=true;
+							}
+						}
+					}
+					epfds_r[i].events=0; 
+				}
+			}
+
+		}
+
+		if(check)
+		{
+			continue;
+		}
+
+		if (_50_msec.elapse(currentTime) >= (pool->usleep_time/1000))
+		{
+			_50_msec = currentTime;
+			if (!tasks.empty())
+			{
+				int retcode = epoll_wait(kdpfd, &epfds[0], task_count, 0);
+				if (retcode > 0)
+				{
+					for(int i = 0; i < retcode; i++)
+					{
+						aTCPClient *task = (aTCPClient *)epfds[i].data.ptr;
+						if (epfds[i].events & (EPOLLERR | EPOLLPRI))
+						{
+							//套接口出现错误
+							Age::logger->debug(SYS_SDK_ID_000029, __PRETTY_FUNCTION__,__LINE__);
+							task->Terminate(aTCPClient::TM_sock_error);
+						}
+						else
+						{
+							if (epfds[i].events & EPOLLIN)
+							{
+								//套接口准备好了读取操作
+								if (!task->listernRecv(true))
+								{
+									Age::logger->debug(SYS_SDK_ID_000030, __PRETTY_FUNCTION__,__LINE__);
+									task->Terminate(aTCPClient::TM_sock_error);
+								}
+							}
+							if (epfds[i].events & EPOLLOUT)
+							{
+								//套接口准备好了写入操作
+								if (!task->listernSend())
+								{
+									Age::logger->debug(SYS_SDK_ID_000031, __PRETTY_FUNCTION__,__LINE__);
+									task->Terminate(aTCPClient::TM_sock_error);
+								}
+							}
+						}
+						epfds[i].events=0; 
+					}
+				}
+
+			}
+			check=true;
+		}
+	}
+
+	//把所有任务队列中的连接加入到回收队列中，回收这些连接
+	for(it = tasks.begin(), next = it, ++next; it != tasks.end(); it = next, ++next)
+	{
+		aTCPClient *task = *it;
+		remove(it);
+		task->getNextState();
+
+	}
+	TEMP_FAILURE_RETRY(::close(kdpfd_r));
+}
+/** 
+ * @brief 析构函数 
+ */
+aTCPClientPool::~aTCPClientPool()
+{
+	if (checkconnThread)
+	{
+		checkconnThread->final();
+		checkconnThread->join();
+		SAFE_DELETE(checkconnThread);
+	}
+	if (checkwaitThread)
+	{
+		checkwaitThread->final();
+		checkwaitThread->join();
+		SAFE_DELETE(checkwaitThread);
+	}
+	taskThreads.joinAll();
+
+	aTCPClient_IT it,next;
+	for (it = tasks.begin(),next = it ,++next ;it != tasks.end(); it = next,++next)
+	{
+		aTCPClient * task = *it;
+		tasks.erase(it);
+		SAFE_DELETE(task);
+	}
+}
+/** 
+ * @brief 新建线程
+ * 
+ * @return 
+ */
+
+aTCPClientThread * aTCPClientPool::newThread()
+{
+	std::ostringstream name;
+	name <<"aTCPClientThread["<<taskThreads.size()<<"]";
+	aTCPClientThread * taskThread =  new aTCPClientThread(this,name.str());
+
+	if (NULL == taskThread)
+	{
+		return NULL;
+	}
+	if (!taskThread->start())
+	{
+		return NULL;
+	}
+
+	taskThreads.add(taskThread);
+	return taskThread;
+}
+/** 
+ * @brief 初始化函数
+ * 
+ * @return 
+ */
+
+bool aTCPClientPool::init()
+{
+	checkconnThread = new aCheckConnThread(this);
+	if (NULL == checkconnThread)
+	{
+		return false;
+	}
+	if (!checkconnThread->start())
+	{
+		return false;
+	}
+
+	checkwaitThread = new aCkeckWaitThread(this);
+	if (NULL == checkwaitThread)
+	{
+		return false;
+	}
+	if (!checkwaitThread->start())
+	{
+		return false;
+	}
+
+	if (NULL == newThread())
+	{
+		return false;
+	}
+	return true;
+}
+/** 
+ * @brief 连接池放入一个任务
+ * 
+ * @param task task指针
+ * 
+ * @return 
+ */
+
+bool aTCPClientPool::put(aTCPClient * task)
+{
+	if (task)
+	{
+		mlock.lock();
+		for (aTCPClient_IT it = tasks.begin(); it != tasks.end();++it)
+		{
+			aTCPClient *temp = *it;
+
+			if (temp->ip == task->ip && temp->port == task->port)
+			{
+				mlock.unlock();
+				return false;
+			}
+		}
+
+		tasks.push_front(task);
+		mlock.unlock();
+		return true;
+	}
+	return false;
+}
+
+/** 
+ * @brief 循环检查函数
+ * 
+ * @param ct 当前时间
+ */
+
+void aTCPClientPool::timeAction(const atmTime &ct)
+{
+	mlock.lock();
+	for (aTCPClient_IT it = tasks.begin(); it != tasks.end();++it)
+	{
+		aTCPClient *task = *it;
+
+		switch(task->getState())
+		{
+			case aTCPClient::close:
+				if (task->checkStateTimeOut(aTCPClient::close,ct,4) && task->connect())
+				{
+					addCheckWait(task);
+				}
+				break;
+			case aTCPClient::okay:
+				{	
+					aRealTime now;
+					if (task->checkInterval(now))
+					{
+						if (task->checkTick())
+						{
+							Age::logger->error("socket check error");
+							task->Terminate(aTCPClient::TM_sock_error);
+						}
+						else
+						{
+							//send the task signle;
+							std::string send;
+							task->getClientTickMsg(send);
+							if (task->sendCmd(send))
+							{
+								task->setTick();
+							}
+						}
+					}
+				}break;
+			case aTCPClient::recyle:
+				if (task->checkStateTimeOut(aTCPClient::recyle,ct,4))
+				{
+					task->getNextState();
+				}
+			case aTCPClient::sync:
+				break;
+		}
+
+	}
+	mlock.unlock();
+}
+/** 
+ * @brief 重置所有任务
+ */
+
+void aTCPClientPool::resetAll()
+{
+	mlock.lock();
+	for (aTCPClient_IT it = tasks.begin(); it != tasks.end();++it)
+	{
+		aTCPClient *task = *it;
+		switch(task->getState())
+		{
+			case aTCPClient::close:
+				break;
+			case aTCPClient::okay:
+				{
+					task->Terminate(aTCPClient::TM_sock_error);
+				}
+				break;
+			case aTCPClient::recyle:
+				break;
+			case aTCPClient::sync:
+				break;
+		}
+	}
+	mlock.unlock();
+}
+/** 
+ * @brief reload 所有任务
+ * 
+ * @return 
+ */
+
+bool aTCPClientPool::isReload()
+{
+	bool ret = true;
+	mlock.lock();
+	for (aTCPClient_IT it = tasks.begin(); it != tasks.end();++it)
+	{
+		aTCPClient *task = *it;
+		switch(task->getState())
+		{
+			case aTCPClient::close:
+				break;
+			case aTCPClient::okay:
+				{
+					ret = false;
+				}
+				break;
+			case aTCPClient::recyle:
+				break;
+			case aTCPClient::sync:
+				break;
+		}
+	}
+	mlock.unlock();
+	return ret;
+}
+/** 
+ * @brief 将任务加入到检查线程
+ * 
+ * @param task task指针
+ */
+
+void aTCPClientPool::addCheckWait(aTCPClient * task)
+{
+	checkwaitThread->add(task);
+	task->getNextState();
+}
+/** 
+ * @brief 将任务加入到主线程循环
+ * 
+ * @param task task指针
+ * 
+ * @return 
+ */
+
+bool aTCPClientPool::addMain(aTCPClient * task)
+{
+	aTCPClientThread * taskThread = NULL;
+	for (unsigned int i=0;i< taskThreads.size() ;++i)
+	{
+		aTCPClientThread * tmp = (aTCPClientThread * )taskThreads.getByIndex(i);
+		if (tmp && tmp->size()<connPerThread)
+		{
+			taskThread = tmp;
+			break;
+		}
+	}
+
+	if (taskThread == NULL)
+	{
+		taskThread = newThread();
+	}
+
+	if (taskThread)
+	{
+		taskThread->add(task);
+		task->getNextState();
+		return true;
+	}
+	else
+	{
+		Age::logger->fatal("can not find a thread can used");
+		return false;
+	}
+}

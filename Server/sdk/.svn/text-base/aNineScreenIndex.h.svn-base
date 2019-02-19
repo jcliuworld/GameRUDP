@@ -1,0 +1,140 @@
+#ifndef _aNineScreenIndex_H__
+#define _aNineScreenIndex_H__
+#pragma once
+
+/** 
+* @file aNineScreenIndex.h
+* @brief 九屏索引
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-20
+*/
+
+#include <set>
+#include <map>
+#include <vector>
+#include <ext/hash_map>
+#include <ext/pool_allocator.h>
+
+#include "aSceneEntry.h"
+#include "aNoneCopyable.h"
+#include "aRWLock.h"
+#include "aPos.h"
+typedef std::vector<aPosI> aPosIVector;
+typedef __gnu_cxx::hash_map<DWORD,aPosIVector> NINESCREEN_MAP;
+typedef NINESCREEN_MAP::iterator NINESCREEN_MAP_ITER;
+typedef NINESCREEN_MAP::value_type NINESCREEN_MAP_VALUETYPE;
+
+typedef std::set<aSceneEntry * ,std::less<aSceneEntry *> > SCENEENTRY_SET;
+typedef __gnu_cxx::hash_map<DWORD,SCENEENTRY_SET> POSIMAP_INDEX; 
+
+template <int MAX_X = 256, int MAX_Y = 256>
+class aNineScreenIndex : public aNoneCopyable
+{
+	private:
+		/**
+		 * @brief 九屏索引
+		 */
+		static NINESCREEN_MAP _nineScreen;
+		/**
+		 * @brief 前向屏索引
+		 */
+		static NINESCREEN_MAP _directScreen[8];
+		/**
+		 * @brief 后向屏索引
+		 */
+		static NINESCREEN_MAP _reverDirectScreen[8];
+	
+		/**
+		 * @brief 读写锁
+		 */
+		aRWLock _rwlock;
+		/**
+		 * @brief 索引迭代器
+		 */
+		POSIMAP_INDEX _index;
+
+		/**
+		 * @brief 索引内全部对象
+		 */
+		SCENEENTRY_SET _all;
+
+	public:
+		/**
+		 * @brief 获取指定屏索引的九屏索引 
+		 *
+		 * @param posi 屏编号
+		 * @return 九屏索引
+		 */
+		const aPosIVector & getNineScreen(const aPosI & posi);
+
+		/**
+		 * @brief 获取指定屏和方向的正向索引
+		 *
+		 * @param posi 屏索引
+		 * @param dir 方向
+		 * @return 索引列表
+		 */
+		const aPosIVector & getDirectScreen(const aPosI & posi, const int dir);
+		/**
+		 * @brief 获取指定屏和方向的反向索引 
+		 *
+		 * @param posi 屏索引
+		 * @param dir 方向
+		 * @return 索引列表
+		 */
+		const aPosIVector & getReverDirectScreen(const aPosI & posi, const int dir);
+
+		/**
+		 * @brief 初始化函数 
+		 *
+		 * @param
+		 * @return
+		 */
+		static bool init();
+
+		/**
+		 * @brief 刷新进入对象的索引 
+		 *
+		 * @param entry 进入对象
+		 * @param newIndex 索引
+		 * @return true 成功 false 失败
+		 */
+		bool refresh(aSceneEntry * entry,const DWORD newIndex);
+		/**
+		 * @brief 刷新进入对象的索引 
+		 *
+		 * @param entry 进入对象
+		 * @param newPos 对象坐标
+		 * @return true 成功 false 失败
+		 */
+		bool refresh(aSceneEntry * entry,const aPos & newPos);
+		/**
+		 * @brief 移除一个进入对象 
+		 *
+		 * @param e 进入对象指针
+		 * @return
+		 */
+		void removeEntry(aSceneEntry * e);
+		/**
+		 * @brief 获取九屏内进入对象列表 
+		 *
+		 * @param screen 屏编号
+		 * @return 九屏对象列表
+		 */
+		const SCENEENTRY_SET &  getNineEntry(DWORD screen);
+		/**
+		 * @brief 构造函数 
+		 *
+		 * @param
+		 * @return
+		 */
+		aNineScreenIndex();
+		/**
+		 * @brief 析构函数 
+		 *
+		 * @param
+		 * @return
+		 */
+		~aNineScreenIndex();
+};
+#endif

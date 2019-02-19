@@ -1,0 +1,353 @@
+#ifndef _aTCPClient_H__
+#define _aTCPClient_H__
+
+#pragma  once
+/** 
+* @file aTCPClient.h
+* @brief 客户端连接封装 
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-17
+*/
+
+#include "aNoneCopyable.h"
+#include "aSocket.h"
+#include "aTime.h"
+#include "Age.h"
+#include "aMsgParse.h"
+/** 
+ * @brief 客户端连接对象
+ */
+
+class aTCPClient : private aNoneCopyable ,public aMsgParse
+{
+	public:
+		/** 
+		 * @brief 消息处理回调
+		 * 
+		 * @param cmd cmd
+		 * @param iLen cmd len
+		 * 
+		 * @return 已处理 true 未处理 false
+		 */
+		virtual bool msgParse(const char * msg ,const int iLen ){ return false;};
+
+		virtual bool msgQueueParse(const char * msg,const int iLen){ return false;};	
+
+		/**
+		 * @brief 是否是服务器心跳信号
+		 *
+		 * @param msg
+		 * @param iLen
+		 *
+		 * @return 
+		 */
+		virtual bool isTickServer( const char * msg,const int iLen ) = 0;
+
+
+		/**
+		 * @brief 是否是客户端心跳信号
+		 *
+		 * @param msg
+		 * @param iLen
+		 *
+		 * @return 
+		 */
+		virtual bool isTickClient(const char * msg , const int iLen ) = 0;	
+		/**
+		 * @brief 获取服务器心跳协议
+		 *
+		 * @param out
+		 */
+		virtual void getServerTickMsg(std::string &out)=0;
+
+		/**
+		 * @brief 获取客户端心跳协议
+		 *
+		 * @param out
+		 */
+		virtual void getClientTickMsg(std::string &out)=0;
+
+		/** 
+		 * @brief  套接口错误标记
+		 */
+
+		enum TerminateMethod
+		{
+			TM_no,
+			TM_sock_error,
+			TM_server_close
+		};
+		/** 
+		 * @brief 套接口连接状态 
+		 */
+
+		enum ConnectState
+		{
+			close = 0,
+			sync = 1 ,
+			okay = 2,
+			recyle = 3
+		};
+		/** 
+		 * @brief 构造函数 
+		 * 
+		 * @param lip ip 地址
+		 * @param sport 端口
+		 * @param bcompress 是否压缩
+		 */
+
+		aTCPClient(const std::string &lip,const DWORD sport,const bool bcompress = false);
+		/** 
+		 * @brief 析构函数
+		 */
+
+		virtual ~aTCPClient();
+		/** 
+		 * @brief 结束函数
+		 */
+
+		void final();
+		/** 
+		 * @brief 结束套接口
+		 * 
+		 * @param method 方法
+		 */
+
+		void Terminate(const TerminateMethod method);
+		/** 
+		 * @brief 是否结束
+		 * 
+		 * @return 结束
+		 */
+
+		bool isTerminate()const;
+		/** 
+		 * @brief 是否是第一次进入主循环
+		 * 
+		 * @return 是 true 否 false
+		 */
+		bool checkFirstMainLoop();
+		/** 
+		 * @brief 获取连接状态
+		 * 
+		 * @return 连接状态
+		 */
+
+		const ConnectState getState()const;
+		/** 
+		 * @brief 设置连接状态
+		 * 
+		 * @param state 连接状态
+		 */
+
+		void setState(const ConnectState state);
+		/** 
+		 * @brief 获取连接状态
+		 * 
+		 * @param state 连接状态
+		 * 
+		 * @return 连接状态
+		 */
+
+		const char * getStateString(const ConnectState state);
+		/** 
+		 * @brief 加入epoll
+		 * 
+		 * @param kdpfd 套接口
+		 * @param events epoll 事件结构
+		 * @param ptr 
+		 */
+
+		void addEpoll(int kdpfd,__uint32_t events,void *ptr);
+		/** 
+		 * @brief 移除 epoll
+		 * 
+		 * @param kpdfd 套接口
+		 * @param evenets 事件结构
+		 */
+
+		void delEpoll(int kpdfd,__uint32_t evenets);
+		/** 
+		 * @brief 检查套接口超时时间
+		 * 
+		 * @param state 状态
+		 * @param ct 超时
+		 * @param timeout 超时标记 
+		 * 
+		 * @return 
+		 */
+
+		bool checkStateTimeOut(const ConnectState state, const atmTime &ct,const time_t timeout)const;
+
+		virtual int checkRebound()
+		{
+			return 1;
+		}
+		/** 
+		 * @brief 回收连接
+		 */
+
+		virtual void recycleConn(){};
+		/** 
+		 * @brief 将连接加入到容器
+		 */
+
+		virtual void addToContainer(){};
+		/** 
+		 * @brief 将连接从容器中移除
+		 */
+
+		virtual void removeFromContainer(){};
+
+		/** 
+		 * @brief 连接
+		 * 
+		 * @return 
+		 */
+		virtual bool connect();
+		/** 
+		 * @brief 重新连接
+		 */
+
+		virtual void reconn();
+		/** 
+		 * @brief 发送套接口数据
+		 * 
+		 * @param pstrCmd 数据指针 
+		 * @param iLen 长度
+		 * @param _ifBuffer 是否使用buff 
+		 * 
+		 * @return 
+		 */
+
+		bool sendCmd(std::string & msg, const bool _ifBuffer = false);
+		/** 
+		 * @brief 接收监听循环
+		 * 
+		 * @param bool 
+		 * 
+		 * @return 
+		 */
+
+		bool listernRecv(bool);
+		/** 
+		 * @brief 发送监听循环
+		 * 
+		 * @return 
+		 */
+
+		bool listernSend();
+		/** 
+		 * @brief 获取下一个连接状态
+		 */
+
+		void getNextState();
+		/** 
+		 * @brief 重置连接状态
+		 */
+
+		void resetState();
+		/** 
+		 * @brief fdstradd
+		 * 
+		 * @return 
+		 */
+
+		bool isFdsrAdd();
+		/** 
+		 * @brief 设置 fdstradd
+		 * 
+		 * @param 
+		 * 
+		 * @return 
+		 */
+
+		bool fdstrAdd(bool set = true);
+		/** 
+		 * @brief 检查 interval
+		 * 
+		 * @param ct 当前时间
+		 * 
+		 * @return 
+		 */
+
+		bool checkInterval(const aRealTime & ct);
+		/** 
+		 * @brief tick 标记
+		 * 
+		 * @return 
+		 */
+
+		bool checkTick()const;
+		/** 
+		 * @brief 清除 tick 
+		 */
+
+		void clearTick();
+		/** 
+		 * @brief 设置 tick
+		 */
+
+		void setTick();
+
+	public:
+				/** 
+		 * @brief 端口
+		 */
+
+		const DWORD port;
+	protected:
+		/** 
+		 * @brief 套接口
+		 */
+
+		aSocket *_sock;
+		/** 
+		 * @brief 连接状态
+		 */
+
+		volatile ConnectState state;
+		/** 
+		 * @brief 压缩
+		 */
+
+		const bool compress;
+
+	private:
+
+		bool fdstradd;
+		/** 
+		 * @brief 套接口存在时间
+		 */
+
+		atmTime lifeTime;
+		/** 
+		 * @brief 结束标记
+		 */
+
+		TerminateMethod terminate;
+		/** 
+		 * @brief 循环标记
+		 */
+
+		volatile bool mainloop;
+		/** 
+		 * @brief 标记时间
+		 */
+
+		aTimer _tick_timer;
+		/** 
+		 * @brief tick 标记
+		 */
+
+		BYTE tick;
+	public:
+		/** 
+		 * @brief ip地址
+		 */
+
+		const std::string ip;
+
+};
+
+#endif

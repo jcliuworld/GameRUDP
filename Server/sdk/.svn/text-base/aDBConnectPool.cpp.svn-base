@@ -1,0 +1,2030 @@
+#include <zlib.h>
+#include "aDBConnectPool.h"
+#include "aTable.h"
+#include "Age.h"
+#include "sdkL.h"
+
+DWORD aMysqlDB::_autoIncrease = 0;
+
+
+/**
+ * @brief 构造函数
+ *
+ * @param host 主机地址
+ * @param userName 用户名
+ * @param passwd 密码
+ * @param port 端口
+ * @param dbName 数据库名字
+ * @param tableDef 表格定义
+ * @param autoCommit 是否自动提交
+ * @param :_id(++_autoIncrease mysql 对象ID
+ */
+
+aMysqlDB::aMysqlDB(const char * host,char * userName, char *passwd,unsigned int port,char * dbName,aTableDef *tableDef,bool autoCommit):_id(++_autoIncrease)
+{
+	strncpy(_host,host,MAX_HOSTSIZE);
+	strncpy(_dbName,dbName,MAX_DBSIZE);
+	strncpy(_passwd,passwd,MAX_PASSWDSIZE);
+	strncpy(_userName,userName,MAX_USERSIZE);
+	_port = port;
+	_mysql = NULL;
+	_autoCommit = autoCommit;
+	_usedTimes = 0;
+	_tableDef = tableDef;
+}
+
+/** 
+* @brief 数据库初始化
+* 
+* @return 成功 true 失败 false
+*/
+
+bool aMysqlDB::init()
+{
+	if (_mysql)
+	{
+		Age::logger->info("the mysql will be closed ...");
+		mysql_close(_mysql);
+		_mysql = NULL;
+	}
+	_mysql = mysql_init(NULL);
+
+	if (_mysql == NULL)
+	{
+		Age::logger->error("init mysql error ");
+		return false;
+	}
+
+	if (mysql_real_connect(_mysql,_host,_userName,_passwd,_dbName,_port,NULL,CLIENT_COMPRESS|CLIENT_MULTI_STATEMENTS|CLIENT_INTERACTIVE) == NULL)
+	{
+		Age::logger->error(SYS_SDK_ID_000002,_host,_port,_dbName);
+		return false;
+	}
+
+	if (!setAutoCommit())
+	{
+		return false;
+	}
+
+
+	_leftTime.now();
+	_usedTimes = 0;
+	Age::logger->info(SYS_SDK_ID_000003,_host,_port,_dbName);	
+	return true;
+}
+/** 
+* @brief 设置自动提交标记
+* 
+* @return 成功 true 失败 false
+*/
+
+bool aMysqlDB::setAutoCommit()
+{
+	int ret = -1;
+	if (_mysql)
+	{
+		if (_autoCommit)
+		{
+			ret = mysql_real_query(_mysql,"SET AUTOCOMMIT=0",sizeof("SET AUTOCOMMIT=0"));
+		}
+		else
+		{
+			ret = mysql_real_query(_mysql,"SET AUTOCOMMIT=1",sizeof("SET AUTOCOMMIT=0"));
+		}
+	}
+	else
+		return false;
+	return ret == 0;
+}
+/** 
+* @brief 终止
+*/
+
+void aMysqlDB::final()
+{
+	if (_mysql)
+	{
+		Age::logger->info("final the mysql handle .");
+		mysql_close(_mysql);
+		_mysql = NULL;
+	}
+	_usedTimes = 0;
+
+}
+/** 
+* @brief 数据库循环检查
+*/
+
+void aMysqlDB::checkAuction()
+{
+	if (_usedTimes > 18000 || _leftTime.elapse() > 1800 || mysql_ping(_mysql) != 0 )
+	{
+		if (!init())
+		{
+			final();
+			return;
+		}
+	}
+
+	_usedTimes ++ ;	
+}
+/** 
+* @brief 执行SQL语句
+* 
+* @param cmd SQL语句字符串 
+* @param len SQL语句长度
+* 
+* @return mysql 返回码
+*/
+
+int aMysqlDB::exeSql(const char * cmd,unsigned int len)
+{
+	if (!cmd)
+	{
+		return 0;
+	}
+	checkAuction();
+
+	int ret = mysql_real_query(_mysql,cmd,len);
+
+	if (ret)
+	{
+		Age::logger->error("%s:%s",mysql_error(_mysql),cmd);
+		//mysql_close(_mysql);
+		//这里置空防止core
+		//_mysql = NULL;
+	}
+
+	return ret;
+}
+/** 
+* @brief 插入多条记录
+* 
+* @param tableName 表名
+* @param ret 多条记录
+* 
+* @return mysql 返回码
+*/
+
+unsigned int aMysqlDB::exeInsert(const char * tableName, aRecord *rec)
+{
+
+	if (tableName == NULL || rec == NULL)
+	{
+		return 0;
+	}
+
+
+	std::ostringstream cmd;
+
+	cmd<<"INSERT INTO ";
+	cmd<<" "<<tableName<<" ";
+	//rec->insertString(tableName,values,_tableDef);
+
+	std::ostringstream strcmd;
+	std::ostringstream values;
+
+	strcmd<<" (";
+	values<<")VALUES(";
+
+	bool first = true;
+
+	for (aRecord::RECORD_IT it = rec->_record.begin(); it != rec->_record.end();++it)
+	{
+		if (first)
+			first = false;
+		else
+		{
+			strcmd<<",";
+			values<<",";
+
+		}
+
+		strcmd<<"`"<<it->first.c_str()<<"`";
+
+		int type = _tableDef->getColType(tableName,it->first.c_str());
+
+		switch(type)
+		{
+		case DB_BYTE:
+			{
+				BYTE tmp = it->second;
+				values<<"\'"<<tmp<<"\'";
+			}break;
+		case DB_CHAR:
+			{
+				CHAR tmp = it->second;
+                                values<<"\'"<<tmp<<"\'";
+			}break;
+		case DB_WORD:
+			{
+				WORD tmp = it->second;
+				values<<"\'"<<tmp<<"\'";
+			}break;
+		case DB_DWORD:
+			{
+				DWORD tmp = it->second;
+                                values<<"\'"<<tmp<<"\'";
+			}break;
+		case DB_QWORD:
+			{
+				QWORD tmp = it->second;
+				values<<"\'"<<tmp<<"\'";
+			}break;
+		case DB_FLOAT:
+			{
+				FLOAT tmp = it->second;
+                                values<<"\'"<<tmp<<"\'";
+			}break;
+		case DB_LONG:
+			{
+				LONG tmp = it->second;
+                                values<<"\'"<<tmp<<"\'";
+			}break;
+		case DB_LONGLONG:
+			{
+				LONGLONG tmp = it->second;
+				values<<"\'"<<tmp<<"\'";
+			}
+			break;
+		case DB_STR:
+		case DB_BIN:
+			{
+				unsigned int len=(unsigned int)it->second.size();
+				char strData[len * 2 + 1];
+				mysql_real_escape_string(_mysql, strData,it->second,len);
+				values << "\'" << strData << "\'";
+			}break;
+		case DB_BIN2:
+			{
+				unsigned int size = *((DWORD *)(&(it->second._bData[0])));
+				size += sizeof(DWORD);
+				//You must allocate the to buffer to be at least length*2+1 bytes long.
+				char strData[size * 2 + 1];
+				mysql_real_escape_string(_mysql, strData,it->second,size);
+				values << "\'" << strData << "\'";
+
+			}break;
+		case DB_ZIP:
+			{
+				unsigned int size = *((DWORD *)(&(it->second._bData[0])));
+				size += sizeof(DWORD);
+				uLong destLen = size * 120 / 100 + 12;
+				Bytef destBuffer[destLen * sizeof(Bytef)];
+				int retcode = compress(destBuffer, &destLen, (Bytef *)(&(it->second._bData[0])),size);
+				switch(retcode)
+				{
+				case Z_OK:
+					{
+						//You must allocate the to buffer to be at least length*2+1 bytes long.
+						char strData[destLen * 2 + 1];
+						mysql_real_escape_string(_mysql,strData,(char *)destBuffer,destLen);
+						values << "\'" << strData << "\'";
+					}
+					break; 
+				case Z_MEM_ERROR:
+					Age::logger->error("Not enough memory, NULL value instead.... %s",__PRETTY_FUNCTION__);
+					values << "\'\'";
+					break;
+				case Z_BUF_ERROR:
+					Age::logger->error("Not enough memory, NULL value instead.... %s",__PRETTY_FUNCTION__);
+					values << "\'\'";
+					break;
+				}
+			}
+			break;
+		case DB_ZIP2:
+			{
+				uLong destLen = it->second.size() * 120 / 100 + 12;
+				Bytef destBuffer[destLen * sizeof(Bytef)];
+				int retcode = compress(destBuffer, &destLen, (Bytef *)(&(it->second._bData[0])),it->second.size());
+				switch(retcode)
+				{
+				case Z_OK:
+					{
+						//You must allocate the to buffer to be at least length*2+1 bytes long.
+						char strData[destLen * 2 + 1];
+						mysql_real_escape_string(_mysql,strData,(char *)destBuffer,destLen);
+						values << "\'" << strData << "\'";
+					}
+					break; 
+				case Z_MEM_ERROR:
+					Age::logger->error("Not enough memory, NULL value instead.... %s",__PRETTY_FUNCTION__);
+					values << "\'\'";
+					break;
+				case Z_BUF_ERROR:
+					Age::logger->error("Not enough memory, NULL value instead.... %s",__PRETTY_FUNCTION__);
+					values << "\'\'";
+					break;
+				}
+			}
+			break;
+		case DB_NONE:
+			{
+				Age::logger->error("can not find the col type %s",tableName);
+				continue;
+
+			}break;
+		default:
+			break;
+		}
+	}
+
+	cmd <<strcmd.str()<<values.str()<<")";
+
+
+	if (0 == exeSql(cmd.str().c_str(),cmd.str().size()))
+	{
+		return (unsigned int)mysql_insert_id(_mysql);
+	}else
+	{
+		return (unsigned int) -1;
+	}
+
+
+
+
+}
+/** 
+* @brief 删除记录
+* 
+* @param tableName 表名 
+* @param where 条件
+* 
+* @return mysql 返回码
+*/
+
+unsigned int aMysqlDB::exeInsert(const char * tableName,aRecordSet *ret)
+{
+	unsigned int retval = (unsigned int) -1;
+	for ( unsigned int i = 0; i < ret->size(); ++i)
+	{
+		retval = exeInsert(tableName,(*ret)[i]);
+	}
+	return retval;
+}
+/** 
+* @brief 删除记录
+* 
+* @param tableName 表名 
+* @param where 条件
+* 
+* @return mysql 返回码
+*/
+
+
+unsigned int aMysqlDB::exeDelete(const char * tableName, aRecord * where)
+{
+
+	if (tableName == NULL || where == NULL)
+	{
+		return 0;
+	}
+
+
+
+
+	std::ostringstream cmd;
+	//std::ostringstream values;
+
+	cmd<<"DELETE FROM ";
+	cmd<<"`"<<tableName<<"`";
+	//where->whereString(tableName,values,_tableDef);
+
+	std::ostringstream strcmd;
+
+	strcmd<<" WHERE ";
+
+	bool first = true;
+
+	for (aRecord::RECORD_IT it =where->_record.begin(); it != where->_record.end();++it)
+	{
+		if (first)
+			first = false;
+		else
+		{
+			strcmd<<" AND ";
+
+		}
+
+		strcmd<<it->first.c_str()<<"=";
+
+		int type = _tableDef->getColType(tableName,it->first.c_str());
+
+		switch(type)
+		{
+			case DB_BYTE:
+				{
+					BYTE tmp = it->second;
+					strcmd<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_CHAR:
+				{
+					CHAR tmp = it->second;
+					strcmd<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_WORD:
+				{
+					WORD tmp = it->second;
+					strcmd<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_DWORD:
+				{
+					DWORD tmp = it->second;
+					strcmd<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_QWORD:
+				{
+					QWORD tmp = it->second;
+					strcmd<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_FLOAT:
+				{
+					FLOAT tmp = it->second;
+					strcmd<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_LONG:
+				{
+					LONG tmp = it->second;
+					strcmd<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_LONGLONG:
+				{
+					LONGLONG tmp = it->second;
+					strcmd<<"\'"<<tmp<<"\'";
+				}
+				break;
+			case DB_STR:
+				{
+					unsigned int len=(unsigned int)it->second.size();
+					char strData[len * 2 + 1];
+					mysql_real_escape_string(_mysql, strData,it->second,len);
+					strcmd << "\'" << strData << "\'";
+				}break;
+			case DB_BIN:
+			case DB_BIN2:
+			case DB_ZIP:
+			case DB_ZIP2:
+				break;
+			case DB_NONE:
+				{
+					Age::logger->error("can not find the col type %s:%s",tableName,it->first.c_str());
+					continue;
+
+				}break;
+			default:
+				break;
+		}
+	}
+
+	cmd << strcmd.str();
+
+	if (0 == exeSql(cmd.str().c_str(),cmd.str().size()))
+	{
+		return (unsigned int)mysql_affected_rows(_mysql);
+	}else
+	{
+		return (unsigned int) -1;
+	}
+}
+/** 
+* @brief 删除记录
+* 
+* @param tableName 表名 
+* @param where 条件
+* 
+* @return mysql 返回码
+*/
+
+unsigned int aMysqlDB::exeDelete(const char * tableName, const char * where)
+{
+	if (tableName == NULL || where == NULL)
+	{
+		return 0;
+	}
+
+
+	std::ostringstream strcmd;
+	std::ostringstream values;
+
+	strcmd<<"DELETE FROM ";
+	strcmd<<"`"<<tableName<<"`";
+	values << where;
+
+	strcmd << values.str();
+
+	if (0 == exeSql(strcmd.str().c_str(),strcmd.str().size()))
+	{
+
+		return (unsigned int)mysql_affected_rows(_mysql);
+	}else
+	{
+		return (unsigned int) -1;
+	}
+
+}
+/** 
+* @brief 更新一条记录
+* 
+* @param tableName 表名
+* @param rec 更新的记录
+* @param where 条件
+* 
+* @return mysql 返回码
+*/
+
+unsigned int aMysqlDB::exeUpdate(const char * tableName,aRecord * rec,aRecord * where)
+{
+	if (tableName == NULL || rec == NULL)
+	{
+		return 0;
+	}
+
+
+
+	std::ostringstream strcmd;
+
+
+	strcmd<<"UPDATE ";
+	strcmd<<"`"<<tableName<<"`";
+	//rec->updateString(tableName,values,_tableDef);
+
+	std::ostringstream values;
+
+	values<<" SET ";
+
+	bool first = true;
+
+	for (aRecord::RECORD_IT it = rec->_record.begin(); it != rec->_record.end();++it)
+	{
+		if (first)
+			first = false;
+		else
+		{
+			values<<",";
+
+		}
+
+		values<<it->first.c_str()<<"=";
+
+		int type = _tableDef->getColType(tableName,it->first.c_str());
+
+		switch(type)
+		{
+			case DB_BYTE:
+				{
+					BYTE tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_CHAR:
+				{
+					CHAR tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_WORD:
+				{
+					WORD tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_DWORD:
+				{
+					DWORD tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_QWORD:
+				{
+					QWORD tmp = it->second;
+                                        values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_FLOAT:
+				{
+					FLOAT tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_LONG:
+				{
+					LONG tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_LONGLONG:
+				{
+					LONGLONG tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}
+				break;
+			case DB_STR:
+				{
+					unsigned int len=(unsigned int)it->second.size();
+					char strData[len * 2 + 1];
+					mysql_real_escape_string(_mysql, strData,it->second,len);
+					values << "\'" << strData << "\'";
+				}break;
+			case DB_BIN:
+				{
+					unsigned int len=(unsigned int)it->second.size();
+					char strData[len * 2 + 1];
+					mysql_real_escape_string(_mysql, strData,it->second,len);
+					values << "\'" << strData << "\'";
+				}break;
+			case DB_BIN2:
+				{
+					unsigned int size = *((DWORD *)(&(it->second._bData[0])));
+					size += sizeof(DWORD);
+					//You must allocate the to buffer to be at least length*2+1 bytes long.
+					char strData[size * 2 + 1];
+					mysql_real_escape_string(_mysql, strData,it->second,size);
+					values << "\'" << strData << "\'";
+
+				}break;
+			case DB_ZIP:
+				{
+					unsigned int size = *((DWORD *)(&(it->second._bData[0])));
+					size += sizeof(DWORD);
+					uLong destLen = size * 120 / 100 + 12;
+					Bytef destBuffer[destLen * sizeof(Bytef)];
+					int retcode = compress(destBuffer, &destLen, (Bytef *)(&(it->second._bData[0])),size);
+					switch(retcode)
+					{
+						case Z_OK:
+							{
+								//You must allocate the to buffer to be at least length*2+1 bytes long.
+								char strData[destLen * 2 + 1];
+								mysql_real_escape_string(_mysql,strData,(char *)destBuffer,destLen);
+								values << "\'" << strData << "\'";
+							}
+							break; 
+						case Z_MEM_ERROR:
+							Age::logger->error("Not enough memory, NULL value instead.... %s",__PRETTY_FUNCTION__);
+							values << "\'\'";
+							break;
+						case Z_BUF_ERROR:
+							Age::logger->error("Not enough memory, NULL value instead.... %s",__PRETTY_FUNCTION__);
+							values << "\'\'";
+							break;
+					}
+				}
+				break;
+			case DB_ZIP2:
+				{
+					uLong destLen = it->second.size() * 120 / 100 + 12;
+					Bytef destBuffer[destLen * sizeof(Bytef)];
+					int retcode = compress(destBuffer, &destLen, (Bytef *)(&(it->second._bData[0])),it->second.size());
+					switch(retcode)
+					{
+						case Z_OK:
+							{
+								//You must allocate the to buffer to be at least length*2+1 bytes long.
+								char strData[destLen * 2 + 1];
+								mysql_real_escape_string(_mysql,strData,(char *)destBuffer,destLen);
+								values << "\'" << strData << "\'";
+							}
+							break; 
+						case Z_MEM_ERROR:
+							Age::logger->error("Not enough memory, NULL value instead.... %s",__PRETTY_FUNCTION__);
+							values << "\'\'";
+							break;
+						case Z_BUF_ERROR:
+							Age::logger->error("Not enough memory, NULL value instead.... %s",__PRETTY_FUNCTION__);
+							values << "\'\'";
+							break;
+					}
+				}
+				break;
+			case DB_NONE:
+				{
+					Age::logger->error("can not find the col type %s:%s",tableName,it->first.c_str());
+					continue;
+
+				}break;
+			default:
+				break;
+		}
+	}
+
+	//where->whereString(tableName,wherestr,_tableDef);
+
+	std::ostringstream wherestr;
+
+	wherestr<<" WHERE ";
+
+	bool firstw = true;
+
+	for (aRecord::RECORD_IT it = where->_record.begin(); it != where->_record.end();++it)
+	{
+		if (firstw)
+			firstw = false;
+		else
+		{
+			wherestr<<" AND ";
+
+		}
+
+		wherestr<<it->first.c_str()<<"=";
+
+		int type = _tableDef->getColType(tableName,it->first.c_str());
+
+		switch(type)
+		{
+			case DB_BYTE:
+				{
+					BYTE tmp = it->second;
+					wherestr<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_CHAR:
+				{
+					CHAR tmp = it->second;
+					wherestr<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_WORD:
+				{
+					WORD tmp = it->second;
+					wherestr<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_DWORD:
+				{
+					DWORD tmp = it->second;
+					wherestr<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_QWORD:
+				{
+					QWORD tmp = it->second;
+                                        wherestr<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_FLOAT:
+				{
+					FLOAT tmp = it->second;
+					wherestr<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_LONG:
+				{
+					LONG tmp = it->second;
+					wherestr<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_LONGLONG:
+				{
+					LONGLONG tmp = it->second;
+					wherestr<<"\'"<<tmp<<"\'";
+				}
+				break;
+			case DB_STR:
+				{
+					unsigned int len=(unsigned int)it->second.size();
+					char strData[len * 2 + 1];
+					mysql_real_escape_string(_mysql, strData,it->second,len);
+					wherestr << "\'" << strData << "\'";
+				}break;
+
+			case DB_BIN:
+			case DB_BIN2:
+			case DB_ZIP:
+			case DB_ZIP2:
+				break;
+			case DB_NONE:
+				{
+					Age::logger->error("can not find the col type %s:%s",tableName,it->first.c_str());
+					continue;
+
+				}break;
+			default:
+				break;
+		}
+	}
+
+	strcmd << values.str()<<wherestr.str();
+
+
+	if (0 == exeSql(strcmd.str().c_str(),strcmd.str().size()))
+	{
+
+		return (unsigned int)mysql_insert_id(_mysql);
+	}else
+	{
+		return (unsigned int) -1;
+	}
+
+}
+/** 
+ * @brief 更新一条记录
+ * 
+ * @param tableName 表名
+ * @param rec 更新的记录
+ * @param where 条件
+ * 
+ * @return mysql 返回码
+ */
+
+unsigned int aMysqlDB::exeUpdate(const char * tableName,aRecord * rec,const char * where)
+{
+	if (tableName == NULL || rec == NULL)
+	{
+		return 0;
+	}
+
+
+
+	std::ostringstream strcmd;
+	//std::ostringstream values;
+	std::ostringstream wherestr;
+
+	strcmd<<"UPDATE ";
+	strcmd<<"`"<<tableName<<"`";
+	//rec->updateString(tableName,values,_tableDef);
+	std::ostringstream values;
+
+	values<<" SET ";
+
+	bool first = true;
+
+	for (aRecord::RECORD_IT it = rec->_record.begin(); it != rec->_record.end();++it)
+	{
+		if (first)
+			first = false;
+		else
+		{
+			values<<",";
+
+		}
+
+		values<<it->first.c_str()<<"=";
+
+		int type = _tableDef->getColType(tableName,it->first.c_str());
+
+		switch(type)
+		{
+			case DB_BYTE:
+				{
+					BYTE tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_CHAR:
+				{
+					CHAR tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_WORD:
+				{
+					WORD tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_DWORD:
+				{
+					DWORD tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_QWORD:
+				{
+					QWORD tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_FLOAT:
+				{
+					FLOAT tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_LONG:
+				{
+					LONG tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}break;
+			case DB_LONGLONG:
+				{
+					LONGLONG tmp = it->second;
+					values<<"\'"<<tmp<<"\'";
+				}
+				break;
+
+			case DB_STR:
+			case DB_BIN:
+				{
+					unsigned int len=(unsigned int)it->second.size();
+					char strData[len * 2 + 1];
+					mysql_real_escape_string(_mysql, strData,it->second,len);
+					values << "\'" << strData << "\'";
+				}break;
+			case DB_BIN2:
+				{
+					unsigned int size = *((DWORD *)(&(it->second._bData[0])));
+					size += sizeof(DWORD);
+					//You must allocate the to buffer to be at least length*2+1 bytes long.
+					char strData[size * 2 + 1];
+					mysql_real_escape_string(_mysql, strData,it->second,size);
+					values << "\'" << strData << "\'";
+
+				}break;
+			case DB_ZIP:
+				{
+					unsigned int size = *((DWORD *)(&(it->second._bData[0])));
+					size += sizeof(DWORD);
+					uLong destLen = size * 120 / 100 + 12;
+					Bytef destBuffer[destLen * sizeof(Bytef)];
+					int retcode = compress(destBuffer, &destLen, (Bytef *)(&(it->second._bData[0])),size);
+					switch(retcode)
+					{
+						case Z_OK:
+							{
+								//You must allocate the to buffer to be at least length*2+1 bytes long.
+								char strData[destLen * 2 + 1];
+								mysql_real_escape_string(_mysql,strData,(char *)destBuffer,destLen);
+								values << "\'" << strData << "\'";
+							}
+							break; 
+						case Z_MEM_ERROR:
+							Age::logger->error("Not enough memory, NULL value instead.... %s",__PRETTY_FUNCTION__);
+							values << "\'\'";
+							break;
+						case Z_BUF_ERROR:
+							Age::logger->error("Not enough memory, NULL value instead.... %s",__PRETTY_FUNCTION__);
+							values << "\'\'";
+							break;
+					}
+				}
+				break;
+			case DB_ZIP2:
+				{
+					uLong destLen = it->second.size() * 120 / 100 + 12;
+					Bytef destBuffer[destLen * sizeof(Bytef)];
+					int retcode = compress(destBuffer, &destLen, (Bytef *)(&(it->second._bData[0])),it->second.size());
+					switch(retcode)
+					{
+						case Z_OK:
+							{
+								//You must allocate the to buffer to be at least length*2+1 bytes long.
+								char strData[destLen * 2 + 1];
+								mysql_real_escape_string(_mysql,strData,(char *)destBuffer,destLen);
+								values << "\'" << strData << "\'";
+							}
+							break; 
+						case Z_MEM_ERROR:
+							Age::logger->error("Not enough memory, NULL value instead.... %s",__PRETTY_FUNCTION__);
+							values << "\'\'";
+							break;
+						case Z_BUF_ERROR:
+							Age::logger->error("Not enough memory, NULL value instead.... %s",__PRETTY_FUNCTION__);
+							values << "\'\'";
+							break;
+					}
+				}
+				break;
+			case DB_NONE:
+				{
+					Age::logger->error("can not find the col type %s:%s",tableName,it->first.c_str());
+					continue;
+
+				}break;
+			default:
+				break;
+		}
+	}
+
+	wherestr <<  where;
+
+	strcmd << values.str()<<wherestr.str();
+
+
+	if (0 == exeSql(strcmd.str().c_str(),strcmd.str().size()))
+	{
+		return (unsigned int)mysql_insert_id(_mysql);
+	}else
+	{
+		return (unsigned int) -1;
+	}
+
+}
+/** 
+ * @brief 更新多条记录
+ * 
+ * @param tableName 表名
+ * @param rec 更新的记录
+ * @param where 条件
+ * 
+ * @return mysql 返回码
+ */
+
+unsigned int aMysqlDB::exeUpdate(const char * tableName,aRecordSet * ret,aRecord * where)
+{
+
+	unsigned int retval = (unsigned int) -1;
+	for ( unsigned int i = 0; i < ret->size(); ++i)
+	{
+		retval = exeUpdate(tableName,(*ret)[i],where);
+	}
+	return retval;
+}
+/** 
+ * @brief 更新多条记录
+ * 
+ * @param tableName 表名
+ * @param rec 更新的记录
+ * @param where 条件
+ * 
+ * @return mysql 返回码
+ */
+
+unsigned int aMysqlDB::exeUpdate(const char * tableName,aRecordSet * ret,const char * where)
+{
+	unsigned int retval = (unsigned int) -1;
+	for ( unsigned int i = 0; i < ret->size(); ++i)
+	{
+		retval = exeUpdate(tableName,(*ret)[i],where);
+	}
+	return retval;
+
+}
+/** 
+ * @brief 获取数据库记录
+ * 
+ * @param tableName 表名
+ * @param ret 存储对象
+ * @param where 条件
+ * 
+ * @return mysql 返回码
+ */
+
+unsigned int aMysqlDB::exeSelect(const char * tableName,aRecordSet & ret,const char * where)
+{
+
+	if (tableName == NULL)
+	{
+		return 0;
+	}
+	bool nowhere = false;
+	if(where == NULL)
+		nowhere = true;
+
+
+	std::ostringstream strcmd;
+	std::ostringstream wherestr;
+
+	strcmd<<"SELECT * FROM ";
+	strcmd<<"`"<<tableName<<"`";
+	wherestr << where;
+	if(!nowhere)
+		strcmd <<wherestr.str();
+
+
+	if (0 == exeSql(strcmd.str().c_str(),strcmd.str().size()))
+	{
+
+	}else
+	{
+
+		return (unsigned int) -1;
+	}
+
+	unsigned int retCount = 0;
+
+	MYSQL_RES * resault = NULL;
+
+	resault = mysql_store_result(_mysql);
+
+	if (resault == NULL)
+	{
+		mysql_free_result(resault);
+		Age::logger->error("%s",mysql_error(_mysql));
+		return 0;
+	}
+
+	retCount = mysql_num_rows(resault);
+
+	if (retCount == 0)
+	{
+		mysql_free_result(resault);
+		return 0;
+	}
+
+	MYSQL_ROW row;
+
+	unsigned int fieldNum = mysql_num_fields(resault);
+
+	MYSQL_FIELD * field = mysql_fetch_fields(resault);
+
+	while ((row = mysql_fetch_row(resault)) != 0)
+	{
+		aRecord * record = new aRecord();
+		if (record)
+		{
+			unsigned long* len = mysql_fetch_lengths(resault);
+
+			for (unsigned int i = 0; i < fieldNum ;++i)
+			{
+				if (row[i] != NULL)
+				{
+					record->put(field[i].name,row[i],len[i]);
+
+				}
+
+			}
+
+		}
+		else
+			continue;
+
+		ret.put(record);
+
+	}
+
+	mysql_free_result(resault);;
+	return retCount;
+}
+/** 
+ * @brief 获取数据库记录
+ * 
+ * @param tableName 表名
+ * @param ret 存储对象
+ * @param where 条件
+ * 
+ * @return mysql 返回码
+ */
+
+unsigned int aMysqlDB::exeSelect(const char * tableName,aRecordSet & ret,aRecord * where)
+{
+
+	if (tableName == NULL)
+	{
+		return 0;
+	}
+
+
+	std::ostringstream strcmd;
+	//std::ostringstream wherestr;
+
+	strcmd<<"SELECT * FROM ";
+	strcmd<<"`"<<tableName<<"`";
+	//where->whereString(tableName,wherestr,_tableDef);
+
+	if(where != NULL)
+	{
+		std::ostringstream wherestr;
+
+		wherestr<<" WHERE ";
+
+		bool first = true;
+
+		for (aRecord::RECORD_IT it = where->_record.begin(); it != where->_record.end();++it)
+		{
+			if (first)
+				first = false;
+			else
+			{
+				wherestr<<" AND ";
+
+			}
+
+			wherestr<<it->first.c_str()<<"=";
+
+			int type = _tableDef->getColType(tableName,it->first.c_str());
+
+			switch(type)
+			{
+				case DB_BYTE:
+					{
+						BYTE tmp = it->second;
+						wherestr<<"\'"<<tmp<<"\'";
+					}break; 
+				case DB_CHAR:
+					{
+						CHAR tmp = it->second;
+						wherestr<<"\'"<<tmp<<"\'";
+					}break;
+				case DB_WORD:
+					{
+						WORD tmp = it->second;
+						wherestr<<"\'"<<tmp<<"\'";
+					}break;
+				case DB_DWORD:
+					{
+						DWORD tmp = it->second;
+						wherestr<<"\'"<<tmp<<"\'";
+					}break;
+				case DB_QWORD:
+					{
+						QWORD tmp = it->second;
+						wherestr<<"\'"<<tmp<<"\'";
+					}break;
+				case DB_FLOAT:
+					{
+						FLOAT tmp = it->second;
+						wherestr<<"\'"<<tmp<<"\'";
+					}break;
+				case DB_LONG:
+					{
+						LONG tmp = it->second;
+						wherestr<<"\'"<<tmp<<"\'";
+					}break;
+				case DB_LONGLONG:
+					{
+						LONGLONG tmp = it->second;
+						wherestr<<"\'"<<tmp<<"\'";
+					}
+					break;
+
+				case DB_STR:
+				case DB_BIN:
+					{
+						unsigned int len=(unsigned int)it->second.size();
+						char strData[len * 2 + 1];
+						mysql_real_escape_string(_mysql, strData,it->second,len);
+						wherestr << "\'" << strData << "\'";
+					}break;
+				case DB_BIN2:
+				case DB_ZIP:
+				case DB_ZIP2:
+					break;
+				case DB_NONE:
+					{
+						Age::logger->error("can not find the col type %s:%s",tableName,it->first.c_str());
+						continue;
+
+					}break;
+				default:
+					break;
+			}
+		}
+		strcmd << wherestr.str();
+	}
+	if (0 == exeSql(strcmd.str().c_str(),strcmd.str().size()))
+	{
+
+	}else
+	{
+		return (unsigned int) -1;
+	}
+
+	unsigned int retCount = 0;
+
+	MYSQL_RES * resault = NULL;
+
+	resault = mysql_store_result(_mysql);
+
+	if (resault == NULL)
+	{
+		mysql_free_result(resault);
+		Age::logger->error("%s",mysql_error(_mysql));
+
+		return 0;
+	}
+
+	retCount = mysql_num_rows(resault);
+
+	if (retCount == 0)
+	{
+		mysql_free_result(resault);
+		return 0;
+	}
+
+	MYSQL_ROW row;
+
+	unsigned int fieldNum = mysql_num_fields(resault);
+
+	MYSQL_FIELD * field = mysql_fetch_fields(resault);
+
+	while ((row = mysql_fetch_row(resault)) != 0)
+	{
+		aRecord * record = new aRecord();
+		if (record)
+		{
+			unsigned long * len = mysql_fetch_lengths(resault);
+
+			for (unsigned int i = 0; i < fieldNum ;++i)
+			{
+				if (row[i] != NULL)
+				{
+
+					record->put(field[i].name,row[i],len[i]);
+				}
+
+			}
+
+		}
+		else
+			continue;
+
+		ret.put(record);
+
+	}
+
+	mysql_free_result(resault);
+	return retCount;
+}
+/**
+ * @brief 执行表格创建命令
+ *
+ * @param tableName
+ *
+ * @return 
+ */
+unsigned int aMysqlDB::exeCreate(const char * tableName)
+{
+	if (tableName == NULL)
+	{
+		return 0;
+	}
+
+
+	std::string cmdCreate;
+	_tableDef->getCreateCmd(tableName,cmdCreate);
+	if (0 == exeSql(cmdCreate.c_str(),cmdCreate.size()))
+	{
+
+	}else
+	{
+		return (DWORD) -1;
+	}
+	unsigned int retCount = 0;
+
+	MYSQL_RES * resault = NULL;
+
+	resault = mysql_store_result(_mysql);
+
+	if (resault == NULL)
+	{
+		mysql_free_result(resault);
+		Age::logger->error("%s",mysql_error(_mysql));
+		return 0;
+	}
+
+	retCount = mysql_num_rows(resault);
+
+	mysql_free_result(resault);
+	return retCount;	
+
+
+
+}
+/** 
+ * @brief 字符串转意 序列化存储前必须使用
+ * 
+ * @param src 源字符串 
+ * @param dest 目的字符串
+ * @param len 长度
+ * 
+ * @return 目的字符串
+ */
+
+
+char * aMysqlDB::escapeString(const char * src,char * dest,unsigned int len)
+{
+	if(src == NULL || dest == NULL )
+		return dest;
+	char * end = dest;
+	mysql_real_escape_string(_mysql,end,src,len==0?strlen(src):len);
+	return dest;
+}
+/** 
+ * @brief 字符串转意 序列化存储前必须使用
+ * 
+ * @param src 源字符串    
+ * @param dest 目的字符串
+ * 
+ * @return 目的字符串 
+ */
+
+
+std::string & aMysqlDB::escapeString(std::string &src,std::string &dest)
+{
+	char buff[2*src.length()+1];
+	bzero(buff,sizeof(buff));
+	mysql_real_escape_string(_mysql,buff,src.c_str(),src.length());
+	dest = buff;
+	return dest;
+
+}
+/** 
+ * @brief 字符串转意判断
+ * 
+ * @param src 需要判断的字符串
+ * 
+ * @return true 需要 false 不需要
+ */
+
+
+bool aMysqlDB::escapeString(std::string &src)
+{
+	char buff[2*src.length()+1];
+	bzero(buff,sizeof(buff));
+	mysql_real_escape_string(_mysql,buff,src.c_str(),src.length());
+	return(strcmp(buff,src.c_str())==0);
+}
+/** 
+ * @brief 字符串转意判断
+ * 
+ * @param src 需要判断的字符串
+ * 
+ * @return true 需要 false 不需要
+ */
+
+
+bool aMysqlDB::escapeString(const char *src)
+{
+	char buff[2*strlen(src)+1];
+	bzero(buff,sizeof(buff));
+	mysql_real_escape_string(_mysql,buff,src,strlen(src));
+	return(strcmp(buff,src)==0);
+}
+
+/** 
+ * @brief 构造函数
+ */
+
+aDBConnectPool::aDBConnectPool(){
+
+	bzero(_host,sizeof(_host));
+	bzero(_userName,sizeof(_userName));
+	bzero(_passwd,sizeof(_passwd));
+	bzero(_dbName,sizeof(_dbName));
+	_port = 0;
+	_poolsize = 0;
+	_tableDef = NULL;
+};
+
+
+
+/**
+ * @brief 析构函数
+ */
+
+aDBConnectPool::~aDBConnectPool(){ final();};
+
+/** 
+ * @brief 加载url配置
+ * 
+ * @param urlStr 字符串配置文件
+ * 
+ * @return 成功 true 失败 false
+ */
+
+bool aDBConnectPool::loadConfig(const char * urlStr)
+{
+	//load config file 
+	//the function for init the var about db ;
+	//mysql://username:paswd@127.0.0.1:3306/DB_NAME:connectsize;
+	_port = 3306;
+	_poolsize = 4;
+
+	char strPort[16] = "";
+	char poolSize[16] ="";
+
+	int j=0,k=0;
+
+	size_t i = 0;
+
+	if (0 == strncmp(urlStr,"mysql://",strlen("mysql://")))
+	{
+		for (i = strlen("mysql://");i< strlen(urlStr)+1;++i)
+		{
+			switch(j)
+			{
+				case 0:
+					{
+
+						if (urlStr[i] == ':')
+						{
+							_userName[k] = '\0';
+							j++;
+							k = 0;
+						}
+						else
+						{
+							_userName[k++] = urlStr[i];
+						}
+					}break;
+				case 1:
+					{
+
+						if (urlStr[i] == '@')
+						{
+							_passwd[k]='\0';
+							j++;
+							k = 0;
+						}
+						else
+						{
+							_passwd[k++] = urlStr[i];
+						}
+					}break;
+				case 2:
+					{
+						if (urlStr[i] == ':')
+						{
+							_host[k]='\0';
+							j++;
+							k = 0;
+						}
+						else
+						{
+							_host[k++] = urlStr[i];
+						}
+					}break;
+				case 3:
+					{
+
+
+						if (urlStr[i] == '/')
+						{
+							strPort[k]= '\0';
+							j++;
+							k = 0;
+						}
+						else
+						{
+							strPort[k++] = urlStr[i];
+						}
+					}break;
+				case 4:
+					{
+						if (urlStr[i] == ':')
+						{
+							_dbName[k] = '\0';
+							j++;
+							k = 0;
+						}
+						else
+						{
+							_dbName[k++] = urlStr[i];
+						}
+					}break;
+				case 5:
+					{
+						if (urlStr[i] == '\0')
+						{
+							poolSize[k] = '\0';
+							j++;
+							k = 0;
+						}
+						else
+						{
+							poolSize[k++] = urlStr[i];
+						}
+					}break;
+				default:
+					break;
+			}
+
+		}
+
+		_port = atoi(strPort);
+		_poolsize = atoi(poolSize);
+	}
+	else
+	{
+		return false;
+	}
+
+	return true;
+}
+/** 
+ * @brief 初始化是数据库连接池
+ * 
+ * @param urlstring 数据库url字符串
+ * @param tabdef 全局表格定义
+ * 
+ * @return 成功 true 失败 false
+ */
+
+bool aDBConnectPool::init(const char * urlstring,aTableDef * tabdef)
+{
+	if (!tabdef)
+		return false;
+
+	_tableDef = tabdef;
+
+
+	if(!loadConfig(urlstring))
+	{
+		Age::logger->error("数据库配置解析错误 %s",urlstring);
+		return false;
+	}
+
+	for (unsigned int i = 0; i<_poolsize;i++)
+	{
+		aMysqlDB * mysql = new aMysqlDB(_host,_userName,_passwd,_port,_dbName,_tableDef);
+		stMysql stmysql;
+		stmysql.mysql = mysql;
+		stmysql.state = MYSQL_HANLDE_VALID;
+
+		if (mysql && mysql->init())
+		{
+			_poolMap.insert(std::make_pair(mysql->getID(),stmysql));
+		}
+		else
+		{
+			return false;
+		}
+
+	}
+
+	return true;
+
+}
+/** 
+ * @brief 插入一条记录
+ * 
+ * @param handleID 数据库句柄
+ * @param tableName 表名
+ * @param rec 记录
+ * 
+ * @return 数据库返回码
+ */
+
+unsigned int aDBConnectPool::exeInsert(DBHANDLE handleID,const char * tableName,aRecordSet *ret)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->exeInsert(tableName,ret);
+	}
+	return ( unsigned int) - 1;
+}
+/** 
+ * @brief 插入多条记录
+ * 
+ * @param handleID 数据库句柄
+ * @param tableName 表名
+ * @param rec 记录
+ * 
+ * @return 数据库返回码
+ */
+
+unsigned int aDBConnectPool::exeInsert(DBHANDLE handleID,const char * tableName, aRecord *rec)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->exeInsert(tableName,rec);
+	}
+	return ( unsigned int) - 1;
+}
+/** 
+ * @brief 更新多条记录
+ * 
+ * @param handleID 数据库句柄
+ * @param tableName 表名
+ * @param ret 记录
+ * @param where 条件
+ * 
+ * @return 数据库返回码
+ */
+
+unsigned int aDBConnectPool::exeSelect(DBHANDLE handleID,const char * tableName,aRecordSet & ret,const char * where)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->exeSelect(tableName,ret,where);
+	}
+	return ( unsigned int) - 1;
+}
+/** 
+ * @brief 选取记录
+ * 
+ * @param handleID 数据库句柄 
+ * @param tableName 表名
+ * @param ret 记录
+ * @param where 条件
+ * 
+ * @return 数据库返回码
+ */
+
+unsigned int aDBConnectPool::exeSelect(DBHANDLE handleID,const char * tableName,aRecordSet & ret,aRecord * where)
+{
+
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->exeSelect(tableName,ret,where);
+	}
+	return ( unsigned int) - 1;
+}
+/** 
+ * @brief 更新多条记录
+ * 
+ * @param handleID 数据库句柄
+ * @param tableName 表名
+ * @param ret 记录
+ * @param where 条件
+ * 
+ * @return 数据库返回码
+ */
+
+unsigned int aDBConnectPool::exeUpdate(DBHANDLE handleID,const char * tableName,aRecordSet * ret,const char * where)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->exeUpdate(tableName,ret,where);
+	}
+	return ( unsigned int) - 1;
+}
+/** 
+ * @brief 更新多条记录
+ * 
+ * @param handleID 数据库句柄
+ * @param tableName 表名
+ * @param ret 记录
+ * @param where 条件
+ * 
+ * @return 数据库返回码
+ */
+
+unsigned int aDBConnectPool::exeUpdate(DBHANDLE handleID,const char * tableName,aRecordSet * ret,aRecord * where)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->exeUpdate(tableName,ret,where);
+	}
+	return ( unsigned int) - 1;
+}
+/** 
+ * @brief 更新一条记录
+ * 
+ * @param handleID 数据库句柄
+ * @param tableName 表名
+ * @param rec 记录
+ * @param where 条件
+ * 
+ * @return 数据库返回码 
+ */
+
+unsigned int aDBConnectPool::exeUpdate(DBHANDLE handleID,const char * tableName,aRecord * rec,const char * where)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->exeUpdate(tableName,rec,where);
+	}
+	return ( unsigned int) - 1;
+}
+/** 
+ * @brief 更新一条记录
+ * 
+ * @param handleID 数据库句柄
+ * @param tableName 表名
+ * @param rec 记录
+ * @param where 条件
+ * 
+ * @return 数据库返回码 
+ */
+
+unsigned int aDBConnectPool::exeUpdate(DBHANDLE handleID,const char * tableName,aRecord * rec,aRecord * where)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->exeUpdate(tableName,rec,where);
+	}
+	return ( unsigned int) - 1;
+}
+/** 
+ * @brief 删除一条记录
+ * 
+ * @param handleID 数据库句柄
+ * @param tableName 表名
+ * @param where 条件
+ * 
+ * @return 数据库返回码
+ */
+
+unsigned int aDBConnectPool::exeDelete(DBHANDLE handleID,const char * tableName, const char * where)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->exeDelete(tableName,where);
+	}
+	return ( unsigned int) - 1;
+}
+/** 
+ * @brief 删除一条记录
+ * 
+ * @param handleID 数据库句柄
+ * @param tableName 表名
+ * @param where 条件
+ * 
+ * @return 数据库返回码
+ */
+
+unsigned int aDBConnectPool::exeDelete(DBHANDLE handleID,const char * tableName, aRecord * where)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->exeDelete(tableName,where);
+	}
+	return ( unsigned int) - 1;
+}
+/**
+ * @brief 创建表格
+ *
+ * @param handleID
+ * @param tableName
+ *
+ * @return 
+ */
+unsigned int aDBConnectPool::exeCreate(DBHANDLE handleID,const char * tableName)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->exeCreate(tableName);
+	}
+	return ( unsigned int) - 1;
+
+}
+/** 
+ * @brief 字符串转意 序列化存储前必须使用
+ * 
+ * @param handleID 数据库句柄 
+ * @param src 源字符串 
+ * @param dest 目的字符串
+ * @param len 长度
+ * 
+ * @return 目的字符串
+ */
+
+char * aDBConnectPool::escapeString(DBHANDLE handleID,const char * src,char * dest,unsigned int len)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->escapeString(src,dest,len); 	
+	}
+	return dest;
+}
+/** 
+ * @brief 字符串转意 序列化存储前必须使用
+ *
+ * @param handleID 数据库句柄  
+ * @param src 源字符串    
+ * @param dest 目的字符串
+ * 
+ * @return 目的字符串 
+ */
+
+std::string & aDBConnectPool::escapeString(DBHANDLE handleID,std::string &src,std::string& dest)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->escapeString(src,dest);
+	}
+	return dest;
+}
+/** 
+ * @brief 字符串转意判断
+ * 
+ * @param handleID 数据库句柄 
+ * @param src 需要判断的字符串
+ * 
+ * @return true 需要 false 不需要
+ */
+
+bool aDBConnectPool::escapeString(DBHANDLE handleID,std::string &src)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->escapeString(src);
+	}
+	return false;
+}
+/** 
+ * @brief 字符串转意判断
+ * 
+ * @param handleID 数据库句柄 
+ * @param src 需要判断的字符串
+ * 
+ * @return true 需要 false 不需要
+ */
+
+bool aDBConnectPool::escapeString(DBHANDLE handleID,const char *src)
+{
+	aMysqlDB * handle = getMysqlByID(handleID);
+
+	if (handle)
+	{
+		return handle->escapeString(src);
+	}
+	return false;
+}
+
+/**
+ * @brief 获取表格定义
+ *
+ * @return 返回表格定义
+ */
+
+aTableDef * aDBConnectPool::getTableDef()
+{
+	return _tableDef;
+}
+/**
+ * @brief 获取数据库连接池大小
+ *
+ * @return 数据库连接池大小
+ */
+
+
+unsigned int aDBConnectPool::size()
+{
+	return _poolMap.size();
+}
+/**
+ * @brief 结束数据库连接池
+ */
+
+void aDBConnectPool::final()
+{
+	MYSQLMAP_IT it;
+	for (it = _poolMap.begin();it != _poolMap.end();++it)
+	{
+		it->second.mysql->final();
+		SAFE_DELETE(it->second.mysql);
+	}
+	_poolMap.clear();
+}
+/**
+ * @brief 获取数据库句柄
+ *
+ * @return 数据库句柄
+ */
+
+DBHANDLE  aDBConnectPool::getHandle()
+{
+	DBHANDLE retval = (unsigned int) - 1;
+	mutex.lock();
+	MYSQLMAP_IT it =_poolMap.begin();
+	while (it != _poolMap.end())
+	{
+		if( it->second.state == MYSQL_HANLDE_VALID)
+		{
+			it->second.state = MYSQL_HANDLE_USRD;
+			retval = it->first;
+			break;
+		}
+		++it;
+	}
+	mutex.unlock();
+	return retval;
+}
+/**
+ * @brief 释放数据库句柄
+ *
+ * @param handle 被释放的句柄
+ * 
+ * @return 成功 true 失败 false
+ */
+
+bool aDBConnectPool::putHandle(DBHANDLE handle)
+{
+	MYSQLMAP_IT it;
+	mutex.lock();
+	it = _poolMap.find(handle);
+	if (it != _poolMap.end())
+	{
+		it->second.state = MYSQL_HANLDE_VALID;
+		mutex.unlock();
+		return true;
+	}
+
+	mutex.unlock();
+	return false;
+
+}
+/** 
+ * @brief 获取mysql数据对象
+ *
+ * @param handle 数据库句柄
+ *
+ * @return mysql 数据库对象指针
+ */
+
+aMysqlDB * aDBConnectPool::getMysqlByID(DBHANDLE handle)
+{
+	MYSQLMAP_IT it;
+	aMysqlDB * retval = NULL;
+	mutex.lock();
+	it = _poolMap.find(handle);
+
+	if (it != _poolMap.end())
+	{
+		retval = it->second.mysql;
+	}
+	mutex.unlock();
+	return retval;
+}
+

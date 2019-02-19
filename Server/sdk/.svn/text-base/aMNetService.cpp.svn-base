@@ -1,0 +1,97 @@
+#include "aMNetService.h"
+#include "aMTCPService.h"
+/** 
+ * @file aMNetService.cpp
+ * @brief  网络服务器框架类
+ * @author ljc jc.liuworld@hotmail.com
+ * @date 2010-05-14
+ */
+aMNetService * aMNetService::instance = NULL;
+
+/**
+ * @brief 构造函数
+ *
+ * @param name 服务器名
+ */
+
+aMNetService::aMNetService(const std::string &name) :aService(name)
+{
+	instance = this;
+	tcpService = NULL;
+	serviceName = name;
+}
+
+/**
+ * @brief 服务端口绑定
+ *
+ * @param name 服务器名称
+ * @param port 服务器端口
+ *
+ * @return 连接池状态
+ */
+bool aMNetService::bind(const std::string & name ,const unsigned short port)
+{
+	if(tcpService)
+		return tcpService->bind(name,port);
+	return false;
+}
+
+
+/** 
+ * @brief 初始化
+ * 
+ * @return 成功 true 失败 false 
+ */
+
+bool aMNetService::init()
+{
+	if (!aService::init())
+	{
+		return false;
+	}
+
+	tcpService = new aMTCPService(serviceName);
+
+	if (NULL == tcpService)
+	{
+		return false;
+	}
+
+	return true;
+}
+/** 
+ * @brief 服务器回调
+ * 
+ * @return 成功 true 失败 false
+ */
+
+bool aMNetService::serviceCallback()
+{
+	aMTCPService::ACCEPTINFO info;	
+
+	int retcode = tcpService->accept(info);
+	if ( retcode > 0)
+	{
+		for (aMTCPService::ACCEPTINFO::iterator it = info.begin();it != info.end();++it)
+		{
+			if (it->first > 0)
+			{
+				newTCPTask(it->first,it->second.port,&(it->second.addr));
+			}
+		}
+		
+	}
+
+	return true;
+}
+/** 
+ * @brief 终止
+ */
+
+
+void aMNetService::final()
+{
+	Age::logger->debug("%s",__PRETTY_FUNCTION__);
+	SAFE_DELETE(tcpService);
+}
+

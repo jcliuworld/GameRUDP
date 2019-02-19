@@ -1,0 +1,32 @@
+#ifndef _VarsM_H__
+#define _VarsM_H__
+/**
+ * @file aVarsM .h
+ * @brief 变量管理器 处理变量的储存 发送 刷新等
+ * @author ljc jc.liyuworld@hotmail.com
+ * @version 
+ * @date 2011-10-13
+ */
+#include "aVars.h"
+
+class VarsM
+{
+	public:
+		struct stVars
+		{
+			Vars _var;
+			DWORD _extra;//刷新间隔,发送组别
+		};
+		inline bool saveSerialization(const char * outdata);
+		inline bool readSerialization(const char * indata);
+		inline bool compress();
+		inline bool uncompress();
+		inline bool refreshTimer();
+		inline bool sendToMe();
+		inline bool sendToNine();
+		inline bool sendChange();
+		inline bool sendToGroup();
+			
+	private:
+};
+#endif

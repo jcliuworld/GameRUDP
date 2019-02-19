@@ -1,0 +1,343 @@
+#include "Age.h"
+#include "sdkL.h"
+#include "aTableDef.h"
+#include "aXMLReader.h"
+#pragma pack(1)
+/** 
+ * @file aTableDef.h
+ * @brief 数据库表格结构管理器
+ * @author ljc jc.liuworld@hotmail.com
+ * @date 2010-05-17
+ */
+
+/** 
+ * @brief 注册表结构
+ * 
+ * @param tableName 表名
+ * @param db 列描述
+ * @param size 列个数
+ * 
+ * @return 成功 true 失败 false
+ */
+
+bool aTableDef::regTable(const char * tableName,dbCol *db,int size)
+{
+	/*mutex.lock();
+	if (!tableName || !db)
+	{
+		return false;
+	}
+	dbCol *temp = db;
+	for(int i = 0; i < size ; ++i)
+	{	 dbCol dbtmp;
+		strncpy(dbtmp.name,temp->name,MAX_COLNAME);
+		dbtmp.type = temp->type;
+		dbtmp.size = temp->size;
+		_tableInfo.insert(std::make_pair(tableName,dbtmp));
+		++temp;
+	}
+	mutex.unlock();*/
+	return true;
+}
+bool aTableDef::init(const char * filename)
+{
+	//const dbcol tabledemo[] =
+	//{
+	//	{"id",amysqldb::db_dword,sizeof(dword)},
+	//	{"name",amysqldb::db_str,sizeof(char[max_namesize])},
+	//	{"null",0,0}
+
+	//};
+
+	//regtable("tabledemo",tabledemo);
+
+	aXMLReader xml;
+	if (!xml.initFile(filename))
+	{
+		Age::logger->info(SYS_SDK_ID_000049,filename);
+		return false;
+	}
+
+	xmlNodePtr root = xml.getRootNode("Age");
+	if (!root)
+	{
+		Age::logger->info(SYS_SDK_ID_000049,filename);
+		return false;
+	}
+
+	xmlNodePtr  table = xml.getChildNode(root,"table");
+	while(table)
+	{
+		std::string tablename;
+		xml.getNodePropStr(table,"name",tablename);
+		xmlNodePtr column = xml.getChildNode(table,"column");
+		while(column)
+		{
+			dbCol dbtmp;
+
+			std::string columnname;
+			xml.getNodePropStr(column,"name",columnname);
+
+			strncpy(dbtmp.name,columnname.c_str(),MAX_COLNAME);
+
+			std::string type;
+			xml.getNodePropStr(column,"type",type);
+			
+
+			if (strcmp(type.c_str(),"BYTE")==0)
+			{
+				dbtmp.type = DB_BYTE;
+				dbtmp.size = sizeof(BYTE);
+
+			}else if(strcmp(type.c_str(),"CHAR")==0)
+			{
+				dbtmp.type = DB_CHAR;
+				dbtmp.size = sizeof(CHAR);
+
+			}else if(strcmp(type.c_str(),"WORD")==0)
+			{
+				dbtmp.type = DB_WORD;
+				dbtmp.size = sizeof(WORD);
+
+			}else if(strcmp(type.c_str(),"DWORD")==0)
+			{
+				dbtmp.type = DB_DWORD;
+				dbtmp.size = sizeof(DWORD);
+
+			}else if(strcmp(type.c_str(),"QWORD")==0)
+			{
+				dbtmp.type = DB_QWORD;
+				dbtmp.size = sizeof(QWORD);
+			}
+			else if(strcmp(type.c_str(),"LONG")==0)
+			{
+				dbtmp.type = DB_LONG;
+				dbtmp.size = sizeof(LONG);
+
+			}else if(strcmp(type.c_str(),"LONGLONG")==0)
+			{
+				dbtmp.type = DB_LONGLONG;
+				dbtmp.size = sizeof(LONGLONG);
+
+			}else if(strcmp(type.c_str(),"FLOAT")==0)
+			{
+				dbtmp.type = DB_FLOAT;
+				dbtmp.size = sizeof(FLOAT);
+
+			}else if(strcmp(type.c_str(),"SHORT")==0)
+			{
+				dbtmp.type = DB_SHORT;
+				dbtmp.size = sizeof(SHORT);
+
+			}else if(strcmp(type.c_str(),"STR")==0)
+			{
+				DWORD size;
+				xml.getNodePropNum(column,"size",&size,sizeof(DWORD));
+				dbtmp.size = size;
+				dbtmp.type = DB_STR;
+
+			}else if(strcmp(type.c_str(),"BIN")==0)
+			{
+				dbtmp.type = DB_BIN;
+				dbtmp.size = 0 ;
+
+			}else if(strcmp(type.c_str(),"BIN2")==0)
+			{
+				dbtmp.type = DB_BIN2;
+				dbtmp.size = 0;
+
+			}else if(strcmp(type.c_str(),"ZIP")==0)
+			{
+				dbtmp.type = DB_ZIP;
+				dbtmp.size = 0;
+
+			}else if(strcmp(type.c_str(),"ZIP2")==0)
+			{
+				dbtmp.type = DB_ZIP2;
+				dbtmp.size = 0;
+			}
+
+			_tableInfo.insert(std::make_pair(tablename,dbtmp));	
+
+			Age::logger->debug(SYS_SDK_ID_000051,tablename.c_str(),dbtmp.name,type.c_str(),dbtmp.size);
+			column = xml.getNextNode(column,"column");
+		}
+
+		xmlNodePtr keyNode = xml.getChildNode(table,"key");
+		if(keyNode)
+		{
+			std::string keyname ;
+			xml.getNodePropStr(keyNode,"name",keyname); 
+			_key.insert(std::make_pair(tablename,keyname));	
+		} 	
+
+		xmlNodePtr indexNode = xml.getChildNode(table,"index");		
+		while(indexNode)
+		{
+			std::string indexName ;
+                        xml.getNodePropStr(indexNode,"name",indexName); 	
+
+			_index.insert(std::make_pair(tablename,indexName));
+			indexNode = xml.getNextNode(indexNode,"index");
+				
+		}
+	
+
+		table = xml.getNextNode(table,"table");
+	}
+
+	Age::logger->info(SYS_SDK_ID_000050,filename);
+	return true;
+
+}
+/**  
+ * @brief 根据表名和列名获取数据类型
+ * 
+ * @param tableName 表名
+ * @param colName 列名
+ * 
+ * @return 数据类型
+ */
+
+int aTableDef::getColType(const char * tableName,const char * colName)
+{
+	mutex.lock();
+	TABLEINFO_IT it;
+	int retval = DB_NONE;
+	
+	CHAR strTableName[MAX_NAMESIZE];
+	bzero(strTableName,MAX_NAMESIZE);
+	sscanf(tableName,"%[^_]",strTableName);	
+
+	do
+	{
+		it = _tableInfo.find(strTableName);
+
+		if (it == _tableInfo.end() )
+		{
+			retval = DB_NONE;
+			break;
+		}
+
+		for (it = _tableInfo.lower_bound(strTableName); it != _tableInfo.upper_bound(strTableName);++it)
+		{
+			const   char * str = it->second.name;
+			if (strncmp(str,colName,MAX_COLNAME) == 0)
+			{
+				retval =  it->second.type;
+				break;
+			}
+		}
+	}while(0);
+	mutex.unlock();
+
+	return retval;
+}
+/**
+ * @brief 获取创建表格命令
+ *
+ * @param tableName
+ * @param cmd
+ */
+void aTableDef::getCreateCmd(const char * tableName,std::string & cmd)
+{
+	mutex.lock();
+	TABLEINFO_IT it;
+
+	CHAR strTableName[MAX_NAMESIZE];
+	bzero(strTableName,MAX_NAMESIZE);
+	sscanf(tableName,"%[^_]",strTableName);	
+
+	std::ostringstream cmdTmp;
+
+	cmdTmp<<" CREATE TABLE IF NOT EXISTS `" << tableName <<"` (" ;
+	do
+	{
+		it = _tableInfo.find(strTableName);
+
+		if (it == _tableInfo.end() )
+			break;
+
+		bool isFirst = true;
+		for (it = _tableInfo.lower_bound(strTableName); it != _tableInfo.upper_bound(strTableName);++it)
+		{
+			if(isFirst)
+				isFirst = false;
+			else
+				cmdTmp << ",";
+
+			cmdTmp << "`" << it->second.name << "`";
+			switch(it->second.type) 
+			{
+				case DB_BYTE:
+					{
+						cmdTmp << "TINYINT unsigned NOT NULL  default \'0\'";
+					}break;
+				case DB_CHAR:
+					{
+						cmdTmp << "TINYINT  NOT NULL  default \'0\'";
+					}break;
+				case DB_WORD:
+					{
+						cmdTmp << "TINYINT SMALLINT NOT NULL  default \'0\'";
+					}break;
+				case DB_DWORD:
+					{
+						cmdTmp << "int(10)  NOT NULL default \'0\'";
+					}break;
+				case DB_FLOAT:
+					{
+						cmdTmp << "FLOAT  NOT NULL default \'0\'";
+					}break;
+				case DB_QWORD:
+				case DB_LONG:
+					{
+						cmdTmp << "BIGINT NOT NULL default \'0\'";
+					}break;
+				case DB_LONGLONG:
+					{
+						 cmdTmp << "BIGINT NOT NULL default \'0\'";
+					}break;
+				case DB_STR:
+					{
+						cmdTmp << " varchar( "<< it->second.size  <<")  NOT NULL default \'\'";	
+					}break;
+				case DB_BIN:
+					{
+						cmdTmp << " BLOB NOT NULL default \'\'";
+					}break;
+				case DB_BIN2:
+					{
+					}break;
+				case DB_ZIP:
+				case DB_ZIP2:
+					{
+					}
+					break;
+				default:
+					break; 	
+			}
+		}
+
+		std::map<std::string , std::string>::iterator itKey =  _key.find(strTableName);
+		if(itKey != _key.end())	
+		{
+			cmdTmp << ",KEY (" << itKey->second << ")";	
+		}
+		std::multimap<std::string , std::string>::iterator itIndex =  _index.find(strTableName);	
+		if(itIndex != _index.end())
+		{
+			for (itIndex = _index.lower_bound(strTableName); itIndex != _index.upper_bound(strTableName);++itIndex)
+			{
+				cmdTmp << ",INDEX (" << itIndex->second  << ")";
+			}
+		}	
+		cmdTmp << ")ENGINE=InnoDB default CHARSET=latin1";
+	}while(0);
+
+	cmd = cmdTmp.str();	
+	Age::logger->debug("%s",cmd.c_str());
+	mutex.unlock();
+
+}
+#pragma pack()

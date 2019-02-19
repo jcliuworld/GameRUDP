@@ -1,0 +1,28 @@
+#ifndef _aDebugService_H__
+#define _aDebugService_H__
+/** 
+* @file aDebugService.h
+* @brief 调试服务器基础 
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-07-14
+*/
+#include "aDef.h"
+#include "aThread.h"
+#include "aNetService.h"
+#include "aTCPTaskPool.h"
+class aDebugService : public aNetService,public aThread
+{
+	public:
+		aDebugService():aNetService("DebugServer",DEBUGSERVER),aThread("DebugThread")
+		{
+			_taskPool = NULL;
+		}
+		bool init(WORD port);
+		void run();
+		void newTCPTask(const int sock,const struct sockaddr_in * addr);
+	private:
+		aTCPTaskPool * _taskPool;
+		
+};
+
+#endif

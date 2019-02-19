@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Age>
+	<msg name="Base.msgNull"/>
+	<msg name="Base.msgHeartbeartServer"/>
+	<msg name="Base.msgHeartbeartClient"/>
+	<msg name="Demo.msgUserLoginReq"/>
+	<msg name="Demo.msgUserLoginRsp"/>
+	<msg name="Demo.msgRetcodeRsp"/>
+</Age>

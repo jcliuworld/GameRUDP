@@ -1,0 +1,55 @@
+#ifndef _aHttpTaskPool_h_
+#define _aHttpTaskPool_h_
+/**
+* @file aHttpTaskPool.h
+* @brief 定义实现轻量级(lightweight)的http服务框架
+* @author ljc jc.liuworld@hotmail.com
+* @version 
+* @date 2013-05-16
+*/
+
+#include <string>
+#include <vector>
+#include <queue>
+#include <list>
+#include <unistd.h>
+#include <sys/timeb.h>
+
+#include "aSocket.h"
+#include "aThread.h"
+#include "aHttpTask.h"
+#include "Age.h"
+
+class aHttpTaskPool : private aNoneCopyable
+{
+
+	public:
+	
+		/**
+		 * @brief 构造函数
+		 */
+		aHttpTaskPool()
+		{
+		};
+
+	
+		/**
+		 * @brief 析构函数，销毁一个线程池对象
+		 */
+		~aHttpTaskPool()
+		{
+			final();
+		}
+
+		bool addHttp(aHttpTask *task);
+		bool init();
+		void final();
+
+	private:
+
+		static const int maxHttpThreads = 8;					/**< 最大验证线程数量 */
+		aThreadGroup httpThreads;								/**< http服务处理线程组 */
+
+};
+
+#endif

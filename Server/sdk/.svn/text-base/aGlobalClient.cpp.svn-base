@@ -1,0 +1,161 @@
+#include "aGlobalClient.h"
+/** 
+* @file aglobalclient.h
+* @brief 全局管理服务器客户端 用于连接全局管理服务器
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-12
+*/
+
+/**
+ * @brief 构造函数
+ * 
+ * @param lpsever 服务器框架类指针
+ */
+
+GlobalClient::GlobalClient(aNetService * lpsever) : aMiniTCPClient(SYS_SDK_ID_000007) {
+	mainServer = lpsever;
+	verified = false;
+
+	port = atoi(Age::global["port"].c_str());
+	strncpy(pstrIP,Age::global["server"].c_str(),MAX_IPLENGTH);
+	_isConn = false;
+
+}
+
+void GlobalClient::final()
+{
+	if(mainServer)
+		mainServer->Terminate();
+}
+
+
+/** 
+ * @brief 线程调用函数
+ */
+
+void GlobalClient::run()
+{
+	aMiniTCPClient::run();
+	final();
+	_isConn =false;
+	verified = false;
+}
+/** 
+ * @brief  消息回调
+ * 
+ * @param cmd 消息
+ * @param iLen 消息长度
+ * 
+ * @return  已处理true 未处理 false 
+ */
+
+
+void GlobalClient::getServerList(DWORD type, AVec<VARSRVINFO> &lpList)
+{
+	AMMap<DWORD,VARSRVINFO>::iterator it;
+	it = _serverList.find(type);
+	if (it != _serverList.end())
+	{
+		for (it = _serverList.lower_bound(type) ;it != _serverList.upper_bound(type);++it)
+		{
+			lpList.push_back(it->second);
+		}
+	}
+
+}
+bool GlobalClient::msgParse(const char * msg,const int iLen)
+{
+/*	std::string type_name = msg->GetDescriptor()->name();
+	if (type_name == "msgServerInfo"){
+		Global::msgServerInfo * rev = (Global::msgServerInfo *)msg;
+		mainServer->setIP(rev->strip().c_str());
+		mainServer->setPort(rev->dwport());
+		mainServer->setExtIP(rev->strextip().c_str());
+		mainServer->setExtPort(rev->dwextport());
+		mainServer->setServerID(rev->dwserverid());
+		mainServer->setNetType(rev->dwnettype());
+		setVerified( true );
+
+		return true;	
+	}else if(type_name == "msgServerDependInfo"){
+		Global::msgServerDependInfo * rev = (Global::msgServerDependInfo *)msg;
+		for( int i = 0; i < rev->info_size();i++)
+		{
+			const Global::varDependInfo * info = & rev->info(i);
+			Age::logger->info(SYS_SDK_ID_000047,info->dwservertype(),
+					info->dwserverid(),
+					info->strip().c_str(),
+					info->dwport());
+			_dependList[info->dwservertype()].push_back(*info);
+		}
+		if(mainServer)
+		{
+			mainServer->dealDepend();
+		}
+
+		return true;
+	}else if(type_name == "msgDependOther"){
+		Global::msgDependOther * rev = (Global::msgDependOther *)msg;
+		_dependCheck.insert(std::make_pair(rev->info().dwservertype(),rev->info()));
+		Age::logger->info(SYS_SDK_ID_000048,rev->info().dwserverid(),
+				rev->info().strip().c_str(),rev->info().dwport());
+		return true;
+
+	}else{
+		return mainServer->msgParseGlobal(msg);
+	}
+
+	Age::logger->warn("unkonw msg %s", msg->GetDescriptor()->full_name().c_str());
+*/
+
+	if(isServerInfo(msg,iLen))
+	{
+		return dealServerInfo(msg,iLen);	
+	}
+
+	if(mainServer == NULL)	
+		return false;
+
+	
+	return mainServer->msgParseGlobal(msg,iLen);
+}
+/** 
+ * @brief 初始化函数
+ * 
+ * @return 成功 true 失败 false
+ */
+bool GlobalClient::init(bool isReconn)
+{
+	if(!connect(pstrIP,port))
+	{
+		Age::logger->error(SYS_SDK_ID_000004);
+		return false;
+	}
+	_isConn = true;
+	if(isReconn)
+	{
+		sendReConnectInfo();
+	}
+	else
+	{
+		sendStartInfo();
+	}	
+	while(!isVerified())
+	{
+		char pstrCmd[aSocket::MAX_DATASIZE];
+		int iCmdLen = _sock->recvToCmd(pstrCmd,sizeof(pstrCmd),true);
+
+		if (-1 == iCmdLen)
+		{
+			Age::logger->error(SYS_SDK_ID_000006);
+			return false;
+		}
+		else if (iCmdLen > 0)
+		{
+			msgParse(pstrCmd,iCmdLen);
+		}
+
+	}
+	start();
+	return true;
+}

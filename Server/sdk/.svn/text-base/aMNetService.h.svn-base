@@ -1,0 +1,95 @@
+#ifndef _aMNetService_H__
+#define _aMNetService_H__
+
+/** 
+* @file aMNetService.h
+* @brief  网络服务器框架类
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-14
+*/
+
+#include "aNoneCopyable.h"
+#include "aMTCPService.h"
+#include "aService.h"
+#include "aTCPTask.h"
+#include "Age.h"
+/** 
+* @brief 网络服务器框架类
+*/
+
+class aMNetService : public aService
+{
+	public:
+		/** 
+		 * @brief  析构函数
+		 */
+
+		virtual ~aMNetService(){instance = NULL;}
+		/** 
+		 * @brief 新建一个TCP 任务框架
+		 * 
+		 * @param sock 套接口句柄
+		 * @param srcProt 来源端口
+		 * @param addr 
+		 */
+
+		virtual void newTCPTask(const int sock,const unsigned short srcPort,const struct sockaddr_in * addr) = 0;
+		
+		/** 
+		* @brief 服务端口绑定 
+		* 
+		* @param name 服务器名称
+		* @param port 服务器端口
+		*
+		* @return 连接池状态  
+		*/
+		bool bind(const std::string &name ,const unsigned short port);
+
+	protected:
+		/** 
+		 * @brief 构造函数
+		 * 
+		 * @param name 服务器名 
+		 */
+
+		aMNetService(const std::string &name);
+		/** 
+		 * @brief 初始化
+		 * 
+		 * @return 成功 true 失败 false 
+		 */
+
+		bool init();
+		/** 
+		 * @brief 服务器回调
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		bool serviceCallback();
+		/** 
+		 * @brief 终止
+		 */
+
+		void final();
+	private:
+		/** 
+		 * @brief 对象实例 单价模式
+		 */
+
+		static aMNetService * instance;
+		/** 
+		 * @brief tcp服务器封装
+		 */
+
+		aMTCPService * tcpService;
+		/** 
+		* @brief 服务器名称
+		*/
+		std::string serviceName;
+
+		
+};
+#endif
+
+

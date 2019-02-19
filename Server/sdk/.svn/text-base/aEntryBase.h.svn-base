@@ -1,0 +1,195 @@
+#ifndef _aEntryBase_H__
+#define _aEntryBase_H__
+
+#include <strings.h>
+#include "aDef.h"
+#include "aNoneCopyable.h"
+#include "aComponent.h"
+#include "aBits.h"
+
+#pragma pack(1)
+
+struct aEntryBase
+{
+	/** 
+	 * @brief Entry唯一ID
+	 */
+	DWORD id;
+	/** 
+	 * @brief Entry临时ID（本服务器唯一ID）
+	 */
+
+	DWORD tempid;
+	/** 
+	 * @brief Entry名
+	 */
+
+	char name[MAX_NAMESIZE+1];
+	/** 
+	 * @brief 构造函数
+	 */
+
+	aEntryBase()
+	{
+		id = 0;
+
+		tempid = 0;
+
+		bzero(name,sizeof(name));
+	};
+
+};
+/**
+ * @brief Entry回调函数
+ */
+template <typename T,typename RTValue = bool>
+struct aEntryCallBack
+{
+	virtual RTValue exec( T * e) = 0;
+	virtual ~aEntryCallBack(){};
+};
+
+#define MAX_COMPONENTS 256
+
+class aComponentEntity : public aEntryBase
+{
+	public:
+
+		template <typename C, typename ... Args>
+			aComponent <C>* assign(Args && ... args);
+
+		template <typename C>
+			void remove();
+
+		template <typename C>
+			aComponent<C>* component();
+
+		template <typename ... Components>
+			std::tuple< aComponent<Components>...> components();
+
+		template <typename C>
+			bool has_component() ;	
+
+		template <typename C>
+			void unpack( aComponent<C> &a);
+
+		template <typename C, typename ... Args>
+			void unpack( aComponent<C> &a, aComponent<Args> & ... args);
+
+
+	protected:
+
+	aBits<MAX_COMPONENTS> _mask;
+	typedef AMap<DWORD,aComponentBase *> TYPE_COMPONENTS;
+	TYPE_COMPONENTS _components;
+};
+
+template <typename C, typename ... Args>
+aComponent <C>* aComponentEntity::assign(Args && ... args)
+{
+	aComponentBase::INDENTIFY id = aComponent<C>::getID(); 
+	if(_mask.is(id))
+	{
+		return component<C>(id);
+	}
+	else
+	{
+
+		C * component  = new C(std::forward<Args>(args) ...);
+		_components.insert(std::make_pair(id,component));
+		_mask.set(id);
+	}
+
+}
+
+template <typename C>
+void aComponentEntity::remove()
+{
+	aComponentBase::INDENTIFY id = aComponent<C>::getID();
+        if(_mask.is(id))
+	{
+		_mask.clean(id);
+		TYPE_COMPONENTS::iterator it = _components.find(id);
+
+		if(it != _components.end())
+		{
+			_components.erase(it);
+		}
+	}
+}
+
+template <typename C>
+aComponent<C>* aComponentEntity::component()
+{
+
+	aComponentBase::INDENTIFY id = aComponent<C>::getID();
+	 if(!_mask.is(id))	
+	 {
+		 return NULL;
+	 }
+	 else
+	 {
+		 TYPE_COMPONENTS::iterator it = _components.find(id);
+
+		 if(it != _components.end())
+		 {
+			 return it->second;
+		 }			
+
+		 else
+		 {
+			 return NULL;
+		 }
+	 }
+}
+
+template <typename ... Components>
+std::tuple< aComponent<Components>...> aComponentEntity::components()
+{
+	return std::make_tuple(component<Components>()...);	
+}
+
+template <typename C>
+bool aComponentEntity::has_component() 
+{
+	aComponentBase::INDENTIFY id = aComponent<C>::getID(); 
+
+	return _mask.is(id);
+}
+
+template <typename C>
+void aComponentEntity::unpack( aComponent<C> &a)
+{
+	a = component<C>();
+}
+
+template <typename C, typename ... Args>
+void aComponentEntity::unpack( aComponent<C> &a, aComponent<Args> & ... args)
+{
+	a = component<C>();
+	unpack<Args ...>(args ...);
+}
+
+template <typename T> struct identity { typedef T type; };
+
+template <class T,typename ... Components>
+void call(aComponentEntity * entity,typename identity<std::function<void(aComponentEntity * entity, Components&...)>>::type f)
+{
+	f(entity,entity->unpack( entity->template components< Components ... >()));	
+}
+
+
+template <class T,typename ... Components>
+void call(aComponentEntity * entity,typename identity<std::function<void(aComponentEntity * entity, Components&...)>>::type f,Components ... rest)
+{
+	if(!entity->has_component<T>())
+	{
+		return;
+	}
+	else
+	{
+		call(f,rest...);	
+	}
+}
+
+#endif

@@ -1,0 +1,5 @@
+cast.lo: cast.cpp /usr/include/stdc-predef.h cast.h
+
+/usr/include/stdc-predef.h:
+
+cast.h:

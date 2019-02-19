@@ -1,0 +1,179 @@
+#ifndef _aGlobalClient_H__
+#define _aGlobalClient_H__
+/** 
+* @file aGlobalClient.h
+* @brief 全局管理服务器客户端 用于连接全局管理服务器
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-12
+*/
+
+#include "aMiniTCPClient.h"
+#include "aNetService.h"
+#include "sdkL.h"
+#include "aDef.h"
+
+
+/** 
+* @brief 全局管理服务器连接用客户端
+*/
+
+typedef struct stVarServerInfo
+{
+	DWORD dwServerType;
+	DWORD dwID;
+	AStr strIP;
+	DWORD  dwPort;
+	AStr strExtIP;
+	DWORD dwExtPort;
+	DWORD dwNetType;
+	stVarServerInfo()
+	{
+		dwServerType 	= 0;
+		dwID		= 0;
+		dwPort		= 0;		
+		dwExtPort	= 0;
+		dwNetType	= 0;
+	}
+			
+}VARSRVINFO;
+
+class GlobalClient : public aMiniTCPClient
+{
+	public:
+		/** 
+		 * @brief 构造函数
+		 * 
+		 * @param lpsever 服务器框架类指针
+		 */
+
+		GlobalClient(aNetService * lpsever);
+		/** 
+		 * @brief  析构函数
+		 */
+
+		virtual	~GlobalClient(){};
+		/** 
+		 * @brief 线程调用函数
+		 */
+
+		void run();
+		/** 
+		 * @brief  消息回调
+		 * 
+		 * @param cmd 消息
+		 * @param iLen 消息长度
+		 * 
+		 * @return  已处理true 未处理 false 
+		 */
+
+		bool msgParse(const char * msg,const int iLen);
+		/** 
+		 * @brief 是否需要验证
+		 * 
+		 * @return 是 true 否 false
+		 */
+
+		bool isVerified()
+		{
+			return verified;
+		}
+		/** 
+		 * @brief 设置验证标志
+		 * 
+		 * @param verified 是否
+		 */
+
+		void setVerified(bool verified)
+		{
+			this->verified = verified;
+		}
+		/** 
+		 * @brief 初始化函数
+		 * 
+		 * @return 成功 true 失败 false
+		 */
+
+		bool init(bool isReconn = false);
+
+		
+		/** 
+		 * @brief 获取制定类型的服务器列表
+		 * 
+		 * @param type 服务器类型
+		 * @param lpList 服务器列表
+		 */
+		
+		void getServerList(DWORD type, AVec<VARSRVINFO> &lpList);
+
+		/**
+		 * @brief global 关闭
+		 */
+		virtual void final();
+
+
+		/**
+		 * @brief 是否是服务器信息 
+		 *
+		 * @param msg 处理服务器信息
+		 * @param iLen
+		 *
+		 * @return 
+		 */
+		virtual bool isServerInfo(const char * msg,const int iLen) = 0;
+
+
+		/**
+		 * @brief 
+		 *
+		 * @param msg
+		 * @param iLen
+		 *
+		 * @return 
+		 */
+		virtual bool dealServerInfo(const char * msg, const int iLen) = 0;
+
+
+		/**
+		 * @brief 发送服务器信息
+		 *
+		 * @return 
+		 */
+		virtual bool sendStartInfo() = 0;
+	
+		virtual bool sendReConnectInfo() = 0;
+
+		bool isConn(){return _isConn;}
+	protected:
+		/** 
+		 * @brief 主服务器框架
+		 */
+
+		aNetService * mainServer;
+		/** 
+		 * @brief 验证标记
+		 */
+
+		bool verified;
+		/** 
+		 * @brief  全局管理服务器IP
+		 */
+
+		char pstrIP[MAX_IPLENGTH];
+		/** 
+		 * @brief 全局管理服务器端口
+		 */
+
+		WORD port;
+
+		/**
+		 *@brief 服务器依赖对象列表
+		 *
+		 */
+		AMMap<DWORD,VARSRVINFO> _serverList;
+
+		volatile bool _isConn;
+
+
+};
+#endif
+

@@ -1,0 +1,738 @@
+#ifndef _aSocket_H__
+#define _aSocket_H__
+
+#pragma once
+
+/** 
+* @file aSocket.h
+* @brief  套接口封装
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-14
+*/
+
+#include <string.h>
+#include <pthread.h>
+#include <assert.h>
+#include <iostream>
+#include <queue>
+#include <errno.h>
+#include <unistd.h>
+#include <cstdlib>
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <netinet/tcp.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <zlib.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <ext/pool_allocator.h>
+#include <ext/mt_allocator.h>
+#include <sys/poll.h>
+#include <sys/epoll.h>
+
+
+#include "aDef.h"
+#include "aMemStream.h"
+#include "aNoneCopyable.h"
+#include "Encrypt/Encrypt.h"
+#include "aTime.h"
+#include "aFunc.h"
+/** 
+ * @brief套接口封装 禁用拷贝构造函数
+ */
+
+/**
+* @brief 消息封包
+*
+* ___________________________________________________________
+* |         |			|	      |		    |
+* |压缩标志 | 包长度(包含头部)  | 数据区内容  | CRC校验码   |
+* | (2字节) | （2字节）		|             |             |
+* -----------------------------------------------------------
+*
+*/
+class aSocket : private aNoneCopyable
+{
+	public:
+		/** 
+		 * @brief read time out
+		 */
+
+		static const int T_RD_MSEC;//	=	2100;
+		/** 
+		 * @brief write time out
+		 */
+
+		static const int T_WR_MSEC;//	=	5100;
+		/** 
+		 * @brief packet len
+		 */
+
+		static const unsigned int PH_LEN;//	=	sizeof(unsigned int);
+		/** 
+		 * @brief min packet len
+		 */
+		static const unsigned int PACKET_ZIP_MIN;//	=	32;
+		/** 
+		 * @brief compress bits
+		 */
+
+		static const unsigned int PACKET_ZIP;//	=	0x40000000;
+		/** 
+		 * @brief compress read flag
+		 */
+
+		static const unsigned int INCOMPLETE_READ;//	=	0x00000001;
+		/** 
+		 * @brief compress write flag
+		 */
+		static const unsigned int INCOMPLETE_WRITE;//	=	0x00000002;
+		/** 
+		 * @brief compress mask
+		 */
+		static const unsigned int PACKET_MASK	;//=	_BLOCKSIZE - 1;
+		/** 
+		 * @brief max data buffer size
+		 */
+
+		static const unsigned int MAX_DATABUFFERSIZE;//	=	PACKET_MASK;
+		/** 
+		 * @brief max data size 
+		 */
+
+		static const unsigned int MAX_DATASIZE ;//= (MAX_DATABUFFERSIZE - PH_LEN);
+		/** 
+		 * @brief max user data size  
+		 */
+
+		static const unsigned int MAX_USERDATASIZE ;//= (MAX_DATASIZE -128);
+		/** 
+		 * @brief get ip addr by eth name
+		 * 
+		 * @param ifName eth name
+		 * 
+		 * @return ip addr
+		 */
+
+		static const char * getIPByIfName(const char * ifName);
+		/** 
+		 * @brief  the default constructor 
+		 * 
+		 * @param sock socket  
+		 * @param addr address
+		 * @param compress whether compress
+		 */
+
+		aSocket(const int sock, const struct sockaddr_in * addr = NULL,const bool compress = false);
+		/** 
+		 * @brief the default extract.
+		 */
+		~aSocket();
+		/** 
+		 * @brief get the buff to cmd  
+		 * 
+		 * @param pstrCmd data ptr 
+		 * @param iCmd data len
+		 * @param wait 
+		 * 
+		 * @return socket code
+		 */
+
+		int recvToCmd(void * pstrCmd, const int iCmd,const bool wait);
+		/** 
+		 * @brief send data
+		 * 
+		 * @param pstrCmd data ptr
+		 * @param iCmd data len
+		 * @param buffer whether buffer
+		 * 
+		 * @return successful true or  false
+		 */
+
+		bool sendCmd(const void * pstrCmd, const int iCmd,const bool buffer =false);
+		bool sendCmd(const std::string & send,const bool buffer =false);
+		/** 
+		 * @brief send data no pack
+		 * 
+		 * @param pstrCmd data ptr
+		 * @param msg google protobuf type 
+		 * @param buffer whether buffer
+		 * 
+		 * @return true or flase
+		 */
+
+		// bool sendCmd(const MSG * msg,const bool buffer =false);
+
+		 /**
+		  * @brief send msg use string 
+		  *
+		  * @param msgname
+		  * @param msg
+		  * @param buffer
+		  *
+		  * @return 
+		  */
+		 //bool sendCmd(const std::string & msgname,const std::string & msg,const bool buffer =false);
+
+
+                /** 
+                 * @brief send data no pack
+                 * 
+                 * @param pstrCmd data ptr
+                 * @param iCmd data len 
+                 * @param buffer whether buffer
+                 * 
+                 * @return true or flase
+                 */
+
+
+		bool sendCmdNoPack(const void * pstrCmd, const int iCmd,const bool buffer =false);
+		bool sendCmdNoPack(std::string &out,const bool buffer =false);
+		
+                /** 
+                 * @brief send data no pack
+                 * 
+                 * @param pstrCmd data ptr
+                 * @param msg google protobuf type  
+                 * @param buffer whether buffer
+                 * 
+                 * @return true or flase
+                 */
+		
+                //bool sendCmdNoPack(const MSG * msg,const bool buffer =false);
+                /** 
+                 * @brief sock sync
+                 * 
+                 * @return 
+                 */
+	
+
+		bool sync();
+		/** 
+		 * @brief sock sync
+		 */
+
+		void force_sync();
+		/** 
+		 * @brief check io for read
+		 * 
+		 * @return 
+		 */
+
+		int checkIOForRead();
+		/** 
+		 * @brief check ip for write
+		 * 
+		 * @return 
+		 */
+
+		int checkIOForWrite();
+		/** 
+		 * @brief receive the data to buff with no pool
+		 * 
+		 * @return 
+		 */
+
+		int recvToBufNoPoll();
+		/** 
+		 * @brief receive the data with no pool
+		 * 
+		 * @param pstrCmd data ptr
+		 * @param iCmdLen data len
+		 * 
+		 * @return 
+		 */
+
+		int recvToCmdNoPoll(void * pstrCmd,const int iCmdLen);
+		/**
+		 * @brief 
+		 *
+		 * @param pstrCmd
+		 * @param iCmdLen
+		 *
+		 * @return 
+		 */
+		int recvToNoPackNoPoll(void * pstrCmd ,const unsigned int iCmdLen);
+
+		/**
+		 * @brief 沙箱处理
+		 *
+		 * @return 
+		 */
+		bool verifyFlashSaftyBox();
+		/** 
+		 * @brief get the socket ip
+		 * 
+		 * @return ip addr
+		 */
+
+		inline const char * getIP()const{ return inet_ntoa(addr.sin_addr); }
+		/** 
+		 * @brief get the socket addr
+		 * 
+		 * @return socket addr
+		 */
+
+		inline const DWORD getAddr()const{return addr.sin_addr.s_addr;}
+		/** 
+		 * @brief get the port
+		 * 
+		 * @return port
+		 */
+
+		inline const unsigned short getPort()const {return ntohs(addr.sin_port);}
+		/** 
+		 * @brief get the local ip
+		 * 
+		 * @return local ip
+		 */
+
+		inline const char * getLocalIP() const{return inet_ntoa((localaddr.sin_addr));}
+		/** 
+		 * @brief get the local port
+		 * 
+		 * @return port
+		 */
+
+		inline const unsigned short getLocalPort()const{return ntohs(localaddr.sin_port);}
+		/** 
+		 * @brief set the out time of read
+		 * 
+		 * @param msec read timeout 
+		 */
+
+		inline void setReadTimeOut(const int msec) { rd_msec = msec ;}
+		/** 
+		 * @brief set the out time of write
+		 * 
+		 * @param mesc write timeout
+		 */
+
+		inline void setWriteTimeOit(const int mesc) { wr_msec = mesc;}
+		/** 
+		 * @brief add the sock to epoll
+		 * 
+		 * @param kdpfd sock handle
+		 * @param events events
+		 * @param ptr ptr
+		 */
+
+		inline void addEpoll( int kdpfd, __uint32_t events, void * ptr)
+		{
+			struct epoll_event ev;
+
+			ev.events = events;
+
+			ev.data.ptr = ptr;
+
+			if ( -1 == epoll_ctl(kdpfd,EPOLL_CTL_ADD,sock,&ev))
+			{
+				char _buf[100];
+				bzero(_buf,sizeof(_buf));
+
+				strerror_r(errno,_buf,sizeof(_buf));
+
+				Age::logger->fatal("%s:%s",__FUNCTION__,_buf);
+			}
+		}
+		/** 
+		 * @brief remove the sock form epoll
+		 * 
+		 * @param kdpfd sock handle
+		 * @param events events
+		 */
+
+		inline void delEpoll( int kdpfd, __uint32_t events)
+		{
+			struct epoll_event ev;
+
+			ev.events = events;
+
+			ev.data.ptr = NULL;
+
+			if ( -1 == epoll_ctl(kdpfd,EPOLL_CTL_DEL,sock,&ev))
+			{
+				char _buf[100];
+				bzero(_buf,sizeof(_buf));
+
+				strerror_r(errno,_buf,sizeof(_buf));
+
+				Age::logger->fatal("%s:%s",__FUNCTION__,_buf);
+			}
+		}
+		/** 
+		 * @brief fill pollfd struct
+		 * 
+		 * @param pfd pollfd struct
+		 * @param events events
+		 */
+
+		inline void fillPollFD(struct pollfd & pfd, short events)
+		{
+			pfd.fd = sock;
+
+			pfd.events = events;
+
+			pfd.revents = 0;
+		}
+		/** 
+		 * @brief set the encode method
+		 * 
+		 * @param m method
+		 */
+
+		inline void setEncMethod( CEnctypt::encMethod m ){enc.setEncMask(m);}
+		/** 
+		 * @brief set the key of rc5
+		 * 
+		 * @param data data ptr
+		 * @param iLen data len
+		 * @param rounds encodeing rounds
+		 */
+
+		inline void set_key_rc5(const unsigned char * data,int iLen,int rounds = RC5_8_ROUNDS) {enc.set_key_rc5(data,iLen,rounds);}
+		/** 
+		 * @brief set the encoding mask
+		 * 
+		 * @param m mask
+		 */
+
+		inline void setEncMask(const unsigned int m){enc.setEncMask(m);}
+		/** 
+		 * @brief set the dec mask 
+		 * 
+		 * @param m mask
+		 */
+
+		inline void setDecMask(const unsigned int m){enc.setDecMask(m);}
+		/** 
+		 * @brief set the key of des
+		 * 
+		 * @param key des key
+		 */
+
+		inline void set_key_des(const_DES_cblock * key){enc.set_key_des(key);}
+		/** 
+		 * @brief get the send buffer size
+		 * 
+		 * @return send buffer size
+		 */
+
+		inline unsigned int snd_queue_size(){return _snd_queue.rdSize() + _enc_queue.rdSize();}
+		/** 
+		 * @brief set the recv buffer szie
+		 * 
+		 * @return recv buffer size
+		 */
+
+		inline unsigned int getBufferSize()const { return _rcv_queue.maxSize()+_snd_queue.maxSize();}
+		/** 
+		 * @brief comoress the data
+		 * 
+		 * @param pData data ptr
+		 * @param iLen data len
+		 * @param cmdQueue data of out
+		 * @param _compresss compress falg
+		 * 
+		 * @return 
+		 */
+
+		template <typename bufferType>
+			static inline unsigned int packetPackZip(const void  * pData,const unsigned int iLen, bufferType & cmdQueue,const bool _compresss = true);
+	
+
+		/**     
+		 * @brief encode covert th message to a stream which struct as ProtobufTransportFormat
+		 *              
+		 * @param message user data msg
+		 *              
+		 * @return string user data 
+		 */  
+
+		// struct ProtobufTransportFormat __attribute__ ((__packed__))
+		// {
+		//   int32_t  len;
+		//   int32_t  nameLen;
+		//   char     typeName[nameLen];
+		//   char     protobufData[len-nameLen-8];
+		//   int32_t  checkSum; // adler32 of nameLen, typeName and protobufData
+		// }	
+/*		inline void encode(const MSG * message,std::string & result)
+		{
+
+
+			const std::string& typeName = message->GetTypeName();
+			WORD nameLen = static_cast<WORD>(typeName.size()+1);
+			result.append(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
+			result.append(typeName.c_str(), nameLen);
+			bool succeed = message->AppendToString(&result);
+
+			if (succeed)
+			{
+				const char* begin = result.c_str() ;//+ PH_LEN/2;
+				//int checkSum = adler32(1, reinterpret_cast<const Bytef*>(begin), result.size());// - PH_LEN/2);
+				unsigned int checkSum = Age::getCRC(begin,result.size());
+				result.append(reinterpret_cast<char*>(&checkSum), sizeof(checkSum));
+
+			}
+			else
+			{
+				result.clear();
+			}
+
+			//Age::logger->debug("[sock] nameLen %d name %s msgsize %d",nameLen ,typeName.c_str(),result.size());
+		}
+		inline void encode(const std::string &msgname,const std::string msg,std::string & result)
+		{
+
+
+			WORD nameLen = static_cast<WORD>(msgname.size()+1);
+			result.append(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
+			result.append(msgname.c_str(), nameLen);
+			result.append(msg);
+
+			const char* begin = result.c_str() ;//+ PH_LEN/2;
+			//int checkSum = adler32(1, reinterpret_cast<const Bytef*>(begin), result.size());// - PH_LEN/2);
+			unsigned int checkSum = Age::getCRC(begin,result.size());
+			result.append(reinterpret_cast<char*>(&checkSum), sizeof(checkSum));
+
+			//Age::logger->debug("[sock] nameLen %d name %s",nameLen ,msgname.c_str(),result.size());
+		}
+*/
+		/**     
+                 * @brief create a null msassage throw a name
+                 *              
+                 * @param type_name type name
+                 *              
+                 * @return Msg * 
+                 */  
+
+	/*	inline MSG * createMessage(const std::string& type_name)
+		{
+			google::protobuf::Message* message = NULL;
+			const google::protobuf::Descriptor* descriptor = google::protobuf::DescriptorPool::generated_pool()->FindMessageTypeByName(type_name);
+			if (descriptor)
+			{
+				const google::protobuf::Message* prototype =
+					google::protobuf::MessageFactory::generated_factory()->GetPrototype(descriptor);
+				if (prototype)
+				{
+					message = prototype->New();
+				}
+			}
+			return message;
+		}
+*/
+		/**     
+                 * @brief covertstring to int
+                 *              
+                 * @param type_name type name
+                 *              
+                 * @return Msg * 
+                 */
+		/*inline int asInt32(const char* buf)
+		{
+			int be32 = 0;
+			memcpy(&be32, buf, sizeof(be32));
+			return be32;
+		}*/
+
+		/**
+		 * Decode protobuf Message from transport format defined above.
+		 * returns a Message*
+		 *
+		 * returns NULL if fails.
+		 */
+	/*	inline MSG * decode(const std::string& buf)
+		{
+			MSG * result = NULL;
+
+			int len = static_cast<int>(buf.size());
+			if (len >= 10)
+			{
+				int expectedCheckSum = asInt32(buf.c_str() + buf.size() - PH_LEN);
+				const char* begin = buf.c_str() ;//+ PH_LEN/2;
+				*///int checkSum = adler32(1, reinterpret_cast<const Bytef*>(begin), len - PH_LEN /*- PH_LEN/2*/);
+				/*int checkSum = Age::getCRC(begin,len - PH_LEN);
+				if (checkSum == expectedCheckSum)
+				{
+					WORD nameLen = (*((WORD *)buf.c_str()));
+					if (nameLen >= 2 && nameLen <= len - PH_LEN - PH_LEN/2)
+					{
+						std::string typeName(buf.begin() + PH_LEN/2, buf.begin() +  PH_LEN/2 + nameLen - 1);
+						MSG * message = createMessage(typeName);
+						if (message)
+						{
+							const char* data = buf.c_str() + PH_LEN/2 + nameLen;
+							int dataLen = len - nameLen - PH_LEN - PH_LEN/2;
+							if (message->ParseFromArray(data, dataLen))
+							{
+								result = message;
+							}
+							else
+							{
+								// parse error
+								SAFE_DELETE(message);
+							}
+						}
+						else
+						{
+							// unknown message type
+							Age::logger->debug(SYS_SDK_ID_000056,typeName.c_str());
+						}
+					}
+					else
+					{
+						// invalid name len
+						Age::logger->debug(SYS_SDK_ID_000057,nameLen);
+					}
+				}
+				else
+				{
+					// check sum error
+					 Age::logger->debug(SYS_SDK_ID_000058);
+				}
+			}
+
+			return result;
+		}
+		*/	
+		unsigned int debug_currPtr;
+		unsigned int debug_offPtr;
+		unsigned int debug_max_size;
+		unsigned int debug_wait_size;
+
+	private:
+
+		int sock;
+		struct sockaddr_in addr;
+		struct sockaddr_in localaddr;
+		int rd_msec;
+		int wr_msec;
+
+		stBufferCmdQueue _rcv_queue;
+
+		unsigned int _rcv_raw_size;
+		stBufferCmdQueue _snd_queue;
+		stBufferCmdQueue _enc_queue;
+		unsigned int _curren_cmd;
+		aMutex mutex;
+
+		atmTime lastchecktime;
+
+		unsigned int  bitmask;
+
+
+		CEnctypt enc;
+		inline void setFlag(unsigned int _f) { bitmask |= _f; }
+
+		inline bool issetFlag(unsigned int _f ) const { return bitmask & _f; }
+
+		inline void clearFlag(unsigned int _f) { bitmask &= ~_f; }
+
+		inline bool  needenc() const {return CEnctypt::ENCODE_NONE != enc.getEncMethod(); }
+
+		inline unsigned int packetMinSize() const{ return PH_LEN ;}
+
+		inline unsigned int packetSize(const unsigned char * in) const { 
+			return PH_LEN + ((*((unsigned int *) in))&PACKET_MASK);
+		}
+
+		inline int sendRawData(const void * pBuffer,const int iSize);
+		inline bool sendRawDataIM(const void * pBuffer,const int iSize);
+		inline int sendRawDataNoPoll(const void * pBuffer,const int iSize);
+		inline bool setNonblock();
+		inline int waitForRead();
+		inline int waitForWrite();
+		inline int recvToBuf();
+
+		inline unsigned int packetUnPack(unsigned char * in, const unsigned int iPacketLen,unsigned char * out);
+		template <typename bufferType>
+			inline unsigned int packetAppend(const void  * pData,const unsigned int iLen, bufferType & cmdQueue);
+		template <typename bufferType>
+			inline unsigned int packetAppendNoEnc(const void  * pData,const unsigned int iLen, bufferType & cmdQueue);
+		template <typename bufferType>
+			inline unsigned int packetPackEnc(bufferType & cmdQueue,const unsigned int currendCmd,const unsigned int offset = 0);
+
+};
+
+	template <typename bufferType>
+inline unsigned int aSocket::packetAppendNoEnc(const void * pData,const unsigned int iLen, bufferType & cmdQueue)
+{
+	return packetPackZip(pData,iLen,cmdQueue,PACKET_ZIP == (bitmask & PACKET_ZIP) );
+}
+
+	template <typename bufferType>
+inline unsigned int aSocket::packetAppend(const void * pData,const unsigned int iLen, bufferType & cmdQueue)
+{
+	unsigned int iSize = packetPackZip(pData,iLen,cmdQueue,PACKET_ZIP == ( bitmask & PACKET_ZIP ) );
+
+	if (needenc())
+	{
+		iSize = packetPackEnc(cmdQueue,cmdQueue.rdSize());
+	}
+
+	return iSize;
+}
+
+	template<typename bufferType>
+inline unsigned int aSocket::packetPackZip(const void * pData,const unsigned int iLen, bufferType & cmdQueue,const bool _compresss /* = true */)
+{
+	unsigned int iSize = iLen > MAX_DATASIZE ? MAX_DATASIZE : iLen;
+	unsigned int iMask = 0;
+
+	if ( iSize > PACKET_ZIP_MIN && _compresss )
+	{
+		uLong uZipLen = unzip_size(iSize);
+
+		cmdQueue.wrReserve( uZipLen + PH_LEN );
+
+		int retcode = compress( &(cmdQueue.wrBuf()[PH_LEN]),&uZipLen,(const Bytef *)pData,iSize );
+
+		switch(retcode)
+		{
+			case Z_OK:
+				break;
+			case Z_MEM_ERROR:
+				Age::logger->fatal("(%s)Z_MEM_ERROR",__FUNCTION__);
+				break;
+			case Z_BUF_ERROR:
+				Age::logger->fatal("(%s)Z_BUF_ERROR",__FUNCTION__);
+		}
+		iSize = uZipLen;
+		iMask |= PACKET_ZIP;
+
+	}
+	else
+	{
+		cmdQueue.wrReserve(iSize+PH_LEN);
+		bcopy(pData,&(cmdQueue.wrBuf()[PH_LEN]),iSize);
+	}
+
+	(*(unsigned int *)cmdQueue.wrBuf()) = (iSize | iMask);
+
+	cmdQueue.wrFlip(iSize+PH_LEN);
+	//Age::logger->debug("[sock] iSize:%d  iLen:%d isComp %s ",iSize,iLen,_compresss ? "True":"False");
+	return iSize + PH_LEN;
+
+}
+
+	template <typename bufferType>
+inline unsigned int aSocket::packetPackEnc(bufferType & cmdQueue,const unsigned int currendCmd,const unsigned int offset /* = 0 */)
+{
+	unsigned int mod = (cmdQueue.rdSize() - offset ) % 8 ;
+
+	if ( 0 != mod)
+	{
+		mod = 8 - mod;
+
+		(*(unsigned int *)(&( cmdQueue.rdBuf()[cmdQueue.rdSize() - currendCmd]))) += mod;
+		cmdQueue.wrFlip(mod);
+	}
+	enc.encdec(&cmdQueue.rdBuf()[offset],cmdQueue.rdSize() - offset, true);
+
+	return cmdQueue.rdSize();
+}
+#endif
+

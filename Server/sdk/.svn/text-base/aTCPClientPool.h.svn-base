@@ -1,0 +1,167 @@
+#ifndef _aTCPClientPool_H__
+#define _aTCPClientPool_H__
+
+#pragma once
+
+/** 
+ * @file aTCPClientPool.h
+ * @brief  客户端任务连接池
+ * @author ljc jc.liuworld@hotmail.com
+ * @date 2010-05-18
+ */
+
+#include "aTCPClient.h"
+#include "aThread.h"
+#include "aNoneCopyable.h"
+#include "Age.h"
+#include <list>
+
+/** 
+ * @brief 连接检测线程
+ */
+
+class aCheckConnThread;
+/** 
+ * @brief 连接同步线程
+ */
+
+class aCkeckWaitThread;
+/** 
+ * @brief 连接工作线程
+ */
+
+class aTCPClientThread;
+
+/** 
+ * @brief  TCP客户端任务连接池
+ */
+
+class aTCPClientPool : protected aNoneCopyable
+{
+	public:
+		/** 
+		 * @brief 构造函数 
+		 * 
+		 * @param 每线程连接数
+		 * @param us sleep time 
+		 * 
+		 * @return 
+		 */
+
+		explicit aTCPClientPool(const unsigned int connPerThread = 512,const unsigned long us = 50000L ):connPerThread(connPerThread)
+		{
+			usleep_time = us;
+			checkwaitThread = NULL;
+		}
+		/** 
+		 * @brief 析构函数
+		 */
+
+		~aTCPClientPool();
+
+		/** 
+		 * @brief 初始化函数
+		 * 
+		 * @return 
+		 */
+
+		bool init();
+
+		/** 
+		 * @brief 添加一个TCP客户端任务到连接池
+		 * 
+		 * @param task TCP连接任务
+		 * 
+		 * @return 
+		 */
+
+		bool put(aTCPClient * task);
+
+		/** 
+		 * @brief  时间检测函数 
+		 * 
+		 * @param ct  当前时间 
+		 */
+
+		void timeAction(const atmTime &ct);
+
+		/** 
+		 * @brief 添加到同步检测线程 
+		 * 
+		 * @param task 
+		 */
+
+		void addCheckWait(aTCPClient * task);
+
+		/** 
+		 * @brief 添加到工作线程 
+		 * 
+		 * @param task 客户端连接任务 
+		 * @return 
+		 */
+
+		bool addMain(aTCPClient * task);
+
+		/** 
+		 * @brief  设置挂起时间 
+		 * 
+		 * @param time 时间 单位 毫秒
+		 */
+
+		void setUsleepTime(unsigned long time)
+		{
+			usleep_time = time;
+		}
+
+		bool isReload();
+		void resetAll();
+
+	public:
+		unsigned long usleep_time;
+	private:
+		/** 
+		 * @brief 每线程连接数
+		 */
+
+		const unsigned int connPerThread;
+		/** 
+		 * @brief 新线程
+		 * 
+		 * @return 
+		 */
+
+		aTCPClientThread * newThread();
+		/** 
+		 * @brief 连接检查线程
+		 */
+
+		aCheckConnThread * checkconnThread;
+		/** 
+		 * @brief 连接等待线程
+		 */
+
+		aCkeckWaitThread * checkwaitThread;
+		/** 
+		 * @brief 任务线程
+		 */
+
+		aThreadGroup taskThreads;
+		/** 
+		 * @brief tcp连接容器
+		 */
+
+		typedef std::list< aTCPClient* > aTCPClientConntainer;
+
+		typedef aTCPClientConntainer::iterator aTCPClient_IT;
+		/** 
+		 * @brief 互斥量
+		 */
+
+		aMutex mlock;
+		/** 
+		 * @brief 连接线程
+		 */
+
+		aTCPClientConntainer tasks;
+};
+#endif

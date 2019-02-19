@@ -1,0 +1,5 @@
+md5c.lo: md5c.cpp /usr/include/stdc-predef.h md5c.h
+
+/usr/include/stdc-predef.h:
+
+md5c.h:

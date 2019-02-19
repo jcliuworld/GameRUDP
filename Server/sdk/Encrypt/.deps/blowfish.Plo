@@ -1,0 +1,5 @@
+blowfish.lo: blowfish.cpp /usr/include/stdc-predef.h blowfish.h
+
+/usr/include/stdc-predef.h:
+
+blowfish.h:

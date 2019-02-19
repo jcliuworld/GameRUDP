@@ -1,0 +1,248 @@
+#ifndef aSceneEntry_H__
+#define aSceneEntry_H__
+#pragma once
+
+/** 
+* @file aSceneEntry.h
+* @brief 场景Entry对象
+* @author ljc jc.liuworld@hotmail.com
+* @date 2010-05-19
+*/
+
+#include "aEntry.h"
+#include "aDef.h"
+#include "aPos.h"
+/** 
+ * @brief 屏坐标 
+ */
+typedef DWORD aPosI;
+
+/** 
+ * @brief 九屏范围的长和宽 
+ */
+
+#define NINESCREEN_WIDTH 20
+#define NINESCREEN_HEIGHT 20
+
+/** 
+ * @brief 场景物件类型 
+ */
+
+enum SceneEntryType
+{
+	Entry_Player, /**<角色*/
+	Entry_NPC,/**<NPC*/
+	Entry_Bulid,/**<建筑*/
+	Entry_Object,/**<地物*/
+	Entry_MAX
+};
+/** 
+ * @brief 场景物件状态
+ */
+
+enum SceneEntryState
+{
+	Entry_Normal,
+	Entry_Death,
+	Entry_Hide
+};
+/** 
+ * @brief 场景物件封装 
+ */
+
+class aSceneEntry : public aEntry
+{
+	public:
+
+		/** 
+		 * @brief 坐标转换
+		 * 
+		 * @param screenWH 地图的宽和高 
+		 * @param pos 需要转换的坐标
+		 * @param posi 转换结果
+		 */
+		static void aPosToaPosI(const aPos & screenWH,const aPos & pos, aPosI & posi)
+		{
+			posi = ((screenWH.x + NINESCREEN_WIDTH - 1)/NINESCREEN_WIDTH)*(int(pos.y)/NINESCREEN_HEIGHT) + (int(pos.x)/NINESCREEN_WIDTH);	
+		}
+		/** 
+		 * @brief 构造函数 
+		 * 
+		 * @param type Entry 类型
+		 * @param state Entry 状态
+		 */
+
+		aSceneEntry(SceneEntryType type,const SceneEntryState state = Entry_Normal):_entryType(type),_entryState(state),_position(.0f,.0f,.0f)
+		{
+			_screenIndex = (DWORD)-1;
+			 _inserted = false;
+
+		}
+
+		/** 
+		 * @brief 得到物件的当前坐标
+		 * 
+		 * @return 当前坐标
+		 */
+		inline const aPos & getPosition()const
+		{
+			return _position;
+		}
+
+		/** 
+		 * @brief 获取屏坐标
+		 * 
+		 * @return 屏坐标
+		 */
+
+		inline const aPosI & getPosI()const
+		{
+			return _posI;
+		}
+		/** 
+		 * @brief 获取entry 类型
+		 * 
+		 * @return 类型
+		 */
+
+		inline const SceneEntryType & getType()const
+		{
+			return _entryType;
+		}
+		/** 
+		 * @brief 获取Entry 状态
+		 * 
+		 * @return 状态
+		 */
+
+		inline const SceneEntryState & getState()const
+		{
+			return _entryState;
+		}
+		/** 
+		 * @brief 设置Entry状态
+		 * 
+		 * @param state 状态
+		 */
+
+		inline void setState(const SceneEntryState & state)
+		{
+			_entryState = state;
+		}
+
+		/** 
+		 * @brief 获取Entry 方向
+		 * 
+		 * @return 方向
+		 */
+
+		inline const aVector3 getRotation()const
+		{
+			return _rotation;
+		}
+
+		/** 
+		 * @brief 设置Entry 方向
+		 * 
+		 * @param dir 方向
+		 */
+
+		inline void setRotation(const aVector3 & rotation)
+		{
+			_rotation = rotation;
+		}
+		/** 
+		 * @brief 设置Entry 所在屏索引
+		 * 
+		 * @param index 屏索引
+		 */
+
+		inline void setScreenIndex(const DWORD index)
+		{
+			_screenIndex = index;
+		}
+		/** 
+		 * @brief 获取Entry 所在屏索引
+		 * 
+		 * @return 屏索引
+		 */
+
+		inline DWORD getScreenIndex()
+		{
+			return _screenIndex;
+		}
+
+		/** 
+		 * @brief 是否在场景中 
+		 * 
+		 * @return 在 true 不在 false
+		 */
+
+		inline bool hasInScene()const
+		{
+			return _inserted;
+		}
+		/** 
+		 * @brief 设置进入标记
+		 */
+
+		inline void setinserted(bool inscence = true)
+		{
+			_inserted = inscence;
+		}
+
+	private:
+		SceneEntryType  _entryType;
+
+		SceneEntryState _entryState;
+		
+		/** 
+		 * @brief 当前坐标
+		 */
+		aPos _position;
+		/** 
+		 * @brief 屏坐标
+		 */
+
+		aPosI _posI;
+
+		/** 
+		 * @brief 方向
+		 */
+		aVector3 _rotation; 
+		/** 
+		 * @brief Entry 所在屏索引 -1 表示错误的屏标号 -2 表示自己被移除
+		 */
+
+		DWORD _screenIndex;	
+
+		/** 
+		 * @brief 物件是否在当前屏上
+		 */
+		bool _inserted;
+
+	public:
+		/** 
+		 * @brief 设置物件新坐标
+		 * 
+		 * @param screenWH 场景长宽 
+		 * @param newPos 新坐标
+		 * 
+		 * @return成功 true 失败 false 
+		 */
+
+		bool setPos(const aPos & screenWH,const aPos & newPos)
+		{
+			if(screenWH.x > newPos.x && screenWH.y > newPos.y)
+			{
+				_position = newPos;
+				aPosToaPosI(screenWH,newPos,_posI);
+				return true;
+			}
+			else
+				return false;
+		}	
+
+};
+
+#endif

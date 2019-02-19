@@ -1,0 +1,35 @@
+K 10
+svn:ignore
+V 313
+aclocal.m4
+autom4te.cache
+autoscan.log
+ChangeLog
+config.guess
+autom4te
+config.h
+config.h.in
+config.h.in~
+config.log
+config.status
+config.sub
+configure.in
+configure
+depcomp
+install-sh
+libtool
+ltmain.sh
+lua
+Makefile
+missing
+rep
+stamp-h1
+tags
+.libs
+config.log
+Makefile
+config.status
+autom4te.cache/requests
+autom4te
+
+END

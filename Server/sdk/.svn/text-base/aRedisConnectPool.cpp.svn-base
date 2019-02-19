@@ -1,0 +1,277 @@
+#include "aRedisConnectPool.h"
+#include "Age.h"
+
+
+aRedisConnectPool::aRedisConnectPool()
+{
+	bzero(_host,sizeof(_host));
+	bzero(_passwd,sizeof(_passwd));
+	_db=0;	
+	_port = 0;
+	_poolsize = 0;
+}	
+
+/** 
+ * @brief 析构函数
+ */
+
+
+aRedisConnectPool::~aRedisConnectPool()
+{
+	final();
+}
+/** 
+ * @brief 加载url配置
+ * 
+ * @param urlStr 字符串配置文件
+ * 
+ * @return 成功 true 失败 false
+ */
+
+bool aRedisConnectPool::loadConfig(const char * urlStr)
+{
+	//load config file 
+	//the function for init the var about db ;
+	//redis://密码@IP:PORT/数据库INDEX:连接池大小;
+	//redis://paswd@127.0.0.1:6379/0:4;
+	_port = 6379;
+	_poolsize = 4;
+
+	char strPort[16] = "";
+	char poolSize[16] ="";
+	char db[16] = "";
+
+	int j=0,k=0;
+
+	size_t i = 0;
+
+	if (0 == strncmp(urlStr,"redis://",strlen("redis://")))
+	{
+		for (i = strlen("redis://");i< strlen(urlStr)+1;++i)
+		{
+			switch(j)
+			{
+				case 0:
+					{
+
+						if (urlStr[i] == '@')
+						{
+							_passwd[k]='\0';
+							j++;
+							k = 0;
+						}
+						else
+						{
+							_passwd[k++] = urlStr[i];
+						}
+					}break;
+				case 1:
+					{
+						if (urlStr[i] == ':')
+						{
+							_host[k]='\0';
+							j++;
+							k = 0;
+						}
+						else
+						{
+							_host[k++] = urlStr[i];
+						}
+					}break;
+				case 2:
+					{
+
+
+						if (urlStr[i] == '/')
+						{
+							strPort[k]= '\0';
+							j++;
+							k = 0;
+						}
+						else
+						{
+							strPort[k++] = urlStr[i];
+						}
+					}break;
+				case 3:
+					{
+						if (urlStr[i] == ':')
+						{
+							db[k] = '\0';
+							j++;
+							k = 0;
+						}
+						else
+						{
+							db[k++] = urlStr[i];
+						}
+					}break;
+				case 4:
+					{
+						if (urlStr[i] == '\0')
+						{
+							poolSize[k] = '\0';
+							j++;
+							k = 0;
+						}
+						else
+						{
+							poolSize[k++] = urlStr[i];
+						}
+					}break;
+				default:
+					break;
+			}
+
+		}
+
+		_port = atoi(strPort);
+		_poolsize = atoi(poolSize);
+	
+		_db=atoi(db);
+	}
+	else
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/** 
+ * @brief 初始化是数据库连接池
+ * 
+ * @param urlstring 数据库url字符串
+ * 
+ * @return 成功 true 失败 false
+ */
+
+
+bool aRedisConnectPool::init(const char * url)
+{
+	if(!loadConfig(url))
+	{
+		Age::logger->error("数据库配置解析错误 %s",url);
+		return false;
+	}
+
+	for (unsigned int i = 0; i<_poolsize;i++)
+	{
+		aRedisClient * redis= new aRedisClient(_host,_port,_passwd,_db);
+		stRedis stredis;
+		stredis.redis = redis;
+		stredis.state = REDIS_HANLDE_VALID;
+
+		if (redis && redis->init())
+		{
+			_poolMap.insert(std::make_pair(redis->getID(),stredis));
+		}
+		else
+		{
+			return false;
+		}
+
+	}
+
+	return true;
+}
+
+/**
+* @brief 获取池大小
+*
+* @return 
+*/
+
+unsigned int aRedisConnectPool::size()
+{
+	return _poolMap.size();
+}
+
+/**
+ * @brief 结束数据库连接池
+ */
+
+void aRedisConnectPool::final()
+{
+	REDISMAP_IT it;
+	for (it = _poolMap.begin();it != _poolMap.end();++it)
+	{
+		it->second.redis->disconnect();
+		SAFE_DELETE(it->second.redis);
+	}
+	_poolMap.clear();
+}
+/**
+ * @brief 获取数据库句柄
+ *
+ * @return 数据库句柄
+ */
+
+REDIS_HANDLE aRedisConnectPool::getHandle()
+{
+        REDIS_HANDLE retval = (unsigned int) - 1;
+        mutex.lock();
+        REDISMAP_IT it =_poolMap.begin();
+        while (it != _poolMap.end())
+        {
+                if( it->second.state == REDIS_HANLDE_VALID)
+                {
+                        it->second.state = REDIS_HANDLE_USRD;
+                        retval = it->first;
+                        break;
+                }
+                ++it;
+        }
+        mutex.unlock();
+        return retval;
+}
+
+/**
+ * @brief 释放数据库句柄
+ *
+ * @param handle 被释放的句柄
+ * 
+ * @return 成功 true 失败 false
+ */
+
+bool aRedisConnectPool::putHandle(REDIS_HANDLE handle)
+{
+	REDISMAP_IT it;
+	mutex.lock();
+	it = _poolMap.find(handle);
+	if (it != _poolMap.end())
+	{
+		it->second.state = REDIS_HANLDE_VALID;
+		mutex.unlock();
+		return true;
+	}
+
+	mutex.unlock();
+	return false;
+
+}
+/** 
+ * @brief 获取redis数据对象
+ *
+ * @param handle 数据库句柄
+ *
+ * @return redis 数据库对象指针
+ */
+
+aRedisClient * aRedisConnectPool::getRedisByID(REDIS_HANDLE handle)
+{
+	REDISMAP_IT it;
+	aRedisClient * retval = NULL;
+	mutex.lock();
+	it = _poolMap.find(handle);
+
+	if (it != _poolMap.end())
+	{
+		retval = it->second.redis;
+	}
+	mutex.unlock();
+
+	return retval;
+
+}

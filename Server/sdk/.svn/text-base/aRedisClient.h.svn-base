@@ -1,0 +1,334 @@
+#ifndef _aRedisClient_H__
+#define _aRedisClient_H__
+
+/**
+* @file aRedisClient.h
+* @brief  RedisClient 链接类
+* @author ljc jc.liuworld@hotmail.com
+* @version 
+* @date 2015-07-06
+*/
+
+#include <hiredis/hiredis.h>
+
+
+#include "aDef.h"
+#include "aNoneCopyable.h"
+#include "aRedisCommand.h"
+
+#define REDIS_STATUS_REPLY_OK "OK"
+#define REDIS_STATUS_REPLY_PING "PING"
+
+
+using namespace std;
+
+enum BitOp 
+{
+	AND = 0, 
+	OR,
+	XOR,
+	NOT,
+	BitOp_Num
+};
+
+enum InsertDirection {
+	BEFORE = 0,
+	AFTER,
+	InsertDirection_Num
+};
+
+class aRedisClient:private aNoneCopyable
+{
+	
+	public:
+
+
+		/**
+		 * @brief 构造函数
+		 *
+		 * @param ip IP
+		 * @param port 端口
+		 * @param db 数据库索引
+		 * @param pass 密码
+		 */
+		aRedisClient(const AStr &host,const int port,const AStr &pass,const int db = 0);
+
+		/**
+		 * @brief 析构函数
+		 */
+		~aRedisClient();	
+
+
+		/**
+		 * @brief 初始化
+		 *
+		 * @return 
+		 */
+		bool init();
+
+		/**
+		 * @brief 链接
+		 *
+		 * @return 
+		 */
+		bool connect();	
+
+		/**
+		 * @brief 断开连接
+		 */
+		void disconnect();
+
+		/**
+		 * @brief 重新连接
+		 *
+		 * @return 
+		 */
+		bool reconnect();
+
+		/**
+		 * @brief ping
+		 *
+		 * @return 
+		 */
+		bool ping();
+
+		/**
+		 * @brief 获取db
+		 *
+		 * @param db
+		 *
+		 * @return 
+		 */
+		bool select();
+
+		/**
+		 * @brief 登陆
+		 *
+		 * @param password
+		 *
+		 * @return 
+		 */
+		bool auth( );
+
+		/**
+		 * @brief 退出
+		 *
+		 * @return 
+		 */
+		bool quit();
+
+		/**
+		 * @brief 发送命令
+		 *
+		 * @param cmd
+		 *
+		 * @return 
+		 */
+		redisReply * sendCmd( const aRedisCmd & cmd);
+
+		/**
+		 * @brief 获取数据库句柄
+		 */
+		DWORD getID();
+
+
+	public:
+
+		///////////////////////操作////////////////////////////////////
+
+		// sring command
+		bool set(const AStr& key, const AStr& value);
+
+		bool setex(const AStr& key, const AStr& value, const int seconds);
+
+		bool psetex(const AStr& key, const AStr& value, const int milliseconds);
+
+		int setnx(const AStr& key, const AStr& value);	
+			
+		bool mset(const AMap<AStr,AStr>& kv_map);	
+
+		int msetnx(const AMap<AStr,AStr>& kv_map);	
+
+		int get(const AStr& key, AStr& value);
+
+		int mget(const AVec<AStr>& keys, AMap<AStr,AStr> & kv_map);
+
+		int getset(const AStr& key, const AStr& value, AStr& original);
+
+		int setrange(const AStr& key, const int offset, const AStr& value);
+
+		int getrange(const AStr& key, const int start, const int end, AStr& subAStr);
+
+		int append(const AStr& key, const AStr& value);
+
+		int incr(const AStr& key);
+
+		int incrby(const AStr& key, const int increment);
+
+		float incrbyfloat(const AStr& key, const float increment);
+
+		int decr(const AStr& key);
+
+		int decrby(const AStr& key, const int increment);
+
+		int strlen(const AStr& key);
+
+		int setbit(const AStr& key, const int offset, const int value);
+
+		int getbit(const AStr& key, const int offset);
+
+		int bitcount(const AStr& key);
+
+		int bitcount(const AStr& key, const int start);
+
+		int bitcount(const AStr& key, const int start, const int end );
+
+		int bitop(const BitOp operation, const AStr& destkey, const AVec<AStr>& keys);
+
+		// keys command
+		int exists(const AStr& key);
+
+		int expire(const AStr& key, const unsigned int seconds);
+
+		int expireat(const AStr& key, const unsigned int timestamp);
+
+		int pexpire(const AStr& key, const unsigned int milliseconds);
+
+		int pexpireat(const AStr& key, const unsigned int milliseconds_timestamp);
+
+		int ttl(const AStr& key);
+
+		int pttl(const AStr& key);
+
+		int persist(const AStr& key);
+
+		int keys(const AStr& pattern, AVec<AStr>& arr);
+
+		int del(const AVec<AStr>& keys);
+
+		AStr type(const string& key);
+
+		// set command
+		int scard(const AStr& key);
+
+		int sadd(const AStr& key, const AVec<AStr>& members);
+
+		int sdiff(const AVec<AStr>& keys, ASet<AStr>& s);
+
+		int sdiffstore(const AStr& destination, const AVec<AStr>& keys);
+
+		int sinter(const AVec<AStr>& keys, ASet<AStr>& s);
+
+		int sinterstore(const AStr& destination, const AVec<AStr>& keys);
+
+		int smembers(const AStr& key, ASet<AStr>& members);
+
+		int sismember(const AStr& key, const AStr& member);
+
+		int smove(const AStr& source, const AStr& destination, const AStr& member);
+
+		int spop(const AStr& key, AStr& member);
+
+		int srandmember(const AStr& key, const int count, AVec<AStr>& members);
+
+		int srem(const AStr& key, const AStr& member);
+
+		int sunion(const AVec<AStr>& keys, ASet<AStr> & s);
+
+		int sunionstore(const AStr& destination, const AVec<AStr>& keys);
+
+		// hash command
+		int hget(const AStr& key, const AStr& field, AStr& value);
+
+		int hmget(const AStr& key, const AVec<AStr>& fields, REDIS_HASH_MAP& h);
+
+		int hset(const AStr& key, const AStr& field, const AStr& value);
+
+		bool hmset(const AStr& key, const REDIS_HASH_MAP & h);
+
+		int hsetnx(const AStr& key, const AStr& field, const AStr& value);
+
+		int hexists(const AStr& key, const AStr& field);
+
+		int hincrby(const AStr& key, const AStr& field, const int increment = 1);
+
+		float hincrbyfloat(const AStr& key, const AStr& filed, const float increment);
+
+		int hkeys(const AStr& key, AVec<AStr>& fields);
+
+		int hvals(const AStr& key, AVec<AStr>& values);
+
+		int hgetall(const AStr& key,REDIS_HASH_MAP& h);
+
+		int hlen(const AStr& key);
+
+		// list command
+		int blpop(const AVec<AStr>& keys, const int timeout, AVec<AStr>& values);
+
+		int linsert(const AStr& key, InsertDirection direction, const int pivot, const AStr& value);
+
+		int lindex(const AStr& key, const int index, AStr& value);
+
+		int llen(const AStr& key);
+
+		int lpop(const AStr& key, AStr& value);
+
+		int lpush(const AStr& key, const AVec<AStr>& values);
+
+		int lpushx(const AStr& key, const AStr& value);
+
+		int lrange(const AStr& key, const int start, const int stop, AVec<AStr>& values);
+
+		int lrem(const AStr& key, const int count, const AStr& value);
+
+		bool lset(const AStr& key, const int count, const AStr& value);
+
+		bool ltrim(const AStr& key, const int start, const int stop);
+
+		int rpop(const AStr& key, AStr& value);
+
+		int rpoplpush(const AStr& source, const AStr& destination, AVec<AStr>& values);
+
+		int brpoplpush(const AStr& source, const AStr& destination, const int timeout, AVec<AStr>& values);
+
+		int rpush(const AStr& key, const AVec<AStr>& values);
+
+		int rpushx(const AStr& key, const AStr& value);
+
+		int publish(const AStr& channel, const AStr& message);
+		/////////////////////////////////////////////////////////////	
+
+
+	private:
+		////////////////////////结果处理//////////////////////////
+
+		redisReply* execute(const aRedisCmd& cmd);
+
+		bool Ok(const aRedisCmd& cmd);
+		AStr Status(const aRedisCmd& cmd);
+		int Int(const aRedisCmd& cmd);
+		long Long(const aRedisCmd& cmd);
+		long long LongLong(const aRedisCmd& cmd);
+		float Float(const aRedisCmd& cmd);
+		int String(const aRedisCmd& cmd, AStr& str);
+		int Vec(const aRedisCmd& cmd, AVec<AStr>& arr);
+		int Set(const aRedisCmd& cmd, ASet<AStr>& s);
+		int Map(const aRedisCmd& cmd, const AVec<AStr>& keys, AMap<AStr,AStr>& m);
+		int HMap(const aRedisCmd& cmd, REDIS_HASH_MAP& h);
+		int HMap(const aRedisCmd& cmd, const AVec<AStr> & fileds,REDIS_HASH_MAP& h);
+
+	private:	
+
+		redisContext* _context;
+
+		AStr _host;
+		int _port;
+		int _db;
+		DWORD _dwID;
+
+		AStr _passwd;
+
+		static DWORD _autoIncrease;
+
+};
+#endif
